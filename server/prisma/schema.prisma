@@ -1,0 +1,429 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SALESPERSON
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FieldWorkStatus {
+  NOT_STARTED
+  ACTIVE
+  ENDED
+}
+
+enum VisitStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  CANCELLED
+}
+
+enum VisitOutcome {
+  ORDER_PLACED
+  FOLLOW_UP_REQUIRED
+  NOT_INTERESTED
+  NO_RESPONSE
+  PAYMENT_COLLECTED
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  NEGOTIATION
+  CONVERTED
+  LOST
+}
+
+enum FollowUpStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+enum DocumentStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  CONVERTED
+  CONFIRMED
+  DELIVERED
+  CANCELLED
+}
+
+enum TargetPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum CollectionMethod {
+  CASH
+  CHEQUE
+  UPI
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+enum NotificationType {
+  FIELD_WORK_STARTED
+  FIELD_WORK_ENDED
+  CUSTOMER_REACHED
+  VISIT_COMPLETED
+  MISSED_VISIT
+  OVERDUE_FOLLOWUP
+  TARGET_PROGRESS
+  ADMIN_ALERT
+  ORDER_CREATED
+  COLLECTION_RECEIVED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  name         String
+  phone        String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  salesperson Salesperson?
+  notifications Notification[]
+
+  @@index([role])
+}
+
+model Territory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  salespersons Salesperson[]
+  customers    Customer[]
+}
+
+model Salesperson {
+  id               String            @id @default(cuid())
+  userId           String            @unique
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode     String            @unique
+  status           EmploymentStatus  @default(ACTIVE)
+  territoryId      String?
+  territory        Territory?        @relation(fields: [territoryId], references: [id])
+  managerId        String?
+  manager          Salesperson?      @relation("ManagerReports", fields: [managerId], references: [id])
+  reports          Salesperson[]     @relation("ManagerReports")
+  joinedAt         DateTime          @default(now())
+  fieldWorkStatus  FieldWorkStatus   @default(NOT_STARTED)
+  fieldWorkStartAt DateTime?
+  fieldWorkEndAt   DateTime?
+  lastSeenAt       DateTime?
+  lastLat          Float?
+  lastLng          Float?
+  lastSpeed        Float?
+  isOnline         Boolean           @default(false)
+  todayDistanceKm  Float             @default(0)
+
+  customers      Customer[]
+  targets        Target[]
+  attendance     Attendance[]
+  visits         Visit[]
+  locationPings  LocationPing[]
+  leads          Lead[]
+  quotations     Quotation[]
+  orders         Order[]
+  collections    Collection[]
+  followUps      FollowUp[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([territoryId])
+  @@index([managerId])
+  @@index([status])
+}
+
+model Customer {
+  id            String    @id @default(cuid())
+  name          String
+  phone         String?
+  email         String?
+  address       String?
+  lat           Float?
+  lng           Float?
+  territoryId   String?
+  territory     Territory? @relation(fields: [territoryId], references: [id])
+  salespersonId String?
+  salesperson   Salesperson? @relation(fields: [salespersonId], references: [id])
+  fromLeadId    String?   @unique
+  fromLead      Lead?     @relation(fields: [fromLeadId], references: [id])
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  visits      Visit[]
+  quotations  Quotation[]
+  orders      Order[]
+  collections Collection[]
+  followUps   FollowUp[]
+
+  @@index([salespersonId])
+  @@index([territoryId])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  sku         String   @unique
+  category    String
+  unit        String
+  price       Float
+  taxPercent  Float    @default(0)
+  discountPercent Float @default(0)
+  imageUrl    String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quotationItems QuotationItem[]
+  orderItems     OrderItem[]
+
+  @@index([isActive])
+  @@index([category])
+}
+
+model Target {
+  id            String       @id @default(cuid())
+  salespersonId String
+  salesperson   Salesperson  @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  period        TargetPeriod
+  periodStart   DateTime
+  periodEnd     DateTime
+  targetAmount  Float
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([salespersonId, period, periodStart])
+}
+
+model Attendance {
+  id            String       @id @default(cuid())
+  salespersonId String
+  salesperson   Salesperson  @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  date          DateTime
+  checkInAt     DateTime?
+  checkOutAt    DateTime?
+  checkInLat    Float?
+  checkInLng    Float?
+  checkOutLat   Float?
+  checkOutLng   Float?
+  totalDistanceKm Float @default(0)
+  totalDurationMin Int @default(0)
+
+  @@unique([salespersonId, date])
+}
+
+model LocationPing {
+  id            String      @id @default(cuid())
+  salespersonId String
+  salesperson   Salesperson @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  lat           Float
+  lng           Float
+  speed         Float?
+  accuracy      Float?
+  heading       Float?
+  recordedAt    DateTime
+  createdAt     DateTime    @default(now())
+
+  @@index([salespersonId, recordedAt])
+}
+
+model Visit {
+  id             String       @id @default(cuid())
+  salespersonId  String
+  salesperson    Salesperson  @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  status         VisitStatus  @default(PLANNED)
+  plannedAt      DateTime?
+  checkInAt      DateTime?
+  checkInLat     Float?
+  checkInLng     Float?
+  checkOutAt     DateTime?
+  checkOutLat    Float?
+  checkOutLng    Float?
+  durationMin    Int?
+  notes          String?
+  photoUrls      String[]     @default([])
+  outcome        VisitOutcome?
+  followUpDate   DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([salespersonId, createdAt])
+  @@index([customerId])
+  @@index([status])
+}
+
+model Lead {
+  id            String      @id @default(cuid())
+  salespersonId String
+  salesperson   Salesperson @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  name          String
+  phone         String?
+  email         String?
+  company       String?
+  source        String?
+  status        LeadStatus  @default(NEW)
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  followUps FollowUp[]
+  customer  Customer?
+
+  @@index([salespersonId, status])
+}
+
+model FollowUp {
+  id            String         @id @default(cuid())
+  salespersonId String
+  salesperson   Salesperson    @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  leadId        String?
+  lead          Lead?          @relation(fields: [leadId], references: [id])
+  customerId    String?
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  dueDate       DateTime
+  notes         String?
+  status        FollowUpStatus @default(PENDING)
+  completedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([salespersonId, status, dueDate])
+}
+
+model Quotation {
+  id            String          @id @default(cuid())
+  number        String          @unique
+  salespersonId String
+  salesperson   Salesperson     @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer        @relation(fields: [customerId], references: [id])
+  status        DocumentStatus  @default(DRAFT)
+  subtotal      Float           @default(0)
+  taxTotal      Float           @default(0)
+  discountTotal Float           @default(0)
+  grandTotal    Float           @default(0)
+  notes         String?
+  convertedOrderId String?      @unique
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  items QuotationItem[]
+  order Order? @relation("QuotationOrder", fields: [convertedOrderId], references: [id])
+
+  @@index([salespersonId, status])
+}
+
+model QuotationItem {
+  id          String    @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  quantity    Float
+  unitPrice   Float
+  discountPercent Float @default(0)
+  taxPercent  Float @default(0)
+  lineTotal   Float
+}
+
+model Order {
+  id            String          @id @default(cuid())
+  number        String          @unique
+  salespersonId String
+  salesperson   Salesperson     @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer        @relation(fields: [customerId], references: [id])
+  status        DocumentStatus  @default(CONFIRMED)
+  subtotal      Float           @default(0)
+  taxTotal      Float           @default(0)
+  discountTotal Float           @default(0)
+  grandTotal    Float           @default(0)
+  amountCollected Float         @default(0)
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  items       OrderItem[]
+  collections Collection[]
+  quotation   Quotation? @relation("QuotationOrder")
+
+  @@index([salespersonId, createdAt])
+  @@index([customerId])
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  quantity    Float
+  unitPrice   Float
+  discountPercent Float @default(0)
+  taxPercent  Float @default(0)
+  lineTotal   Float
+}
+
+model Collection {
+  id            String           @id @default(cuid())
+  salespersonId String
+  salesperson   Salesperson      @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer         @relation(fields: [customerId], references: [id])
+  orderId       String?
+  order         Order?           @relation(fields: [orderId], references: [id])
+  amount        Float
+  method        CollectionMethod @default(CASH)
+  notes         String?
+  collectedAt   DateTime         @default(now())
+
+  @@index([salespersonId, collectedAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
