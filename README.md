@@ -22,9 +22,10 @@ Interactive Live Map (Leaflet / OpenStreetMap)
 
 ```
 server/       Express + TypeScript + Prisma (PostgreSQL) + Socket.IO API
-admin-web/    Admin dashboard — React + Vite + TypeScript + Tailwind
-sales-app/    Salesperson field PWA — React + Vite + TypeScript + Tailwind
+admin-web/    Admin dashboard — Next.js 16 (App Router) + TypeScript + Tailwind
+sales-app/    Salesperson field PWA — Next.js 16 (App Router) + TypeScript + Tailwind
 API_CONTRACT.md   Full REST + Socket.IO contract shared by both frontends
+MIGRATION_PLAN.md Vite → Next.js migration plan and rationale
 ```
 
 ## Prerequisites
@@ -45,15 +46,16 @@ npm install
 
 # 3. Configure environment
 cp server/.env.example server/.env   # already points at postgresql://postgres:postgres@localhost:5432/salesforce_db
+# admin-web/.env.local and sales-app/.env.local already set NEXT_PUBLIC_API_URL=http://localhost:4000
 
 # 4. Run migrations + seed demo data
 cd server && npx prisma migrate deploy && cd ..
 npm run seed
 
 # 5. Run everything (three terminals, or use scripts/dev.sh)
-npm run dev:server   # http://localhost:4000
-npm run dev:admin    # http://localhost:5173
-npm run dev:sales    # http://localhost:5174
+npm run dev:server   # http://localhost:4000  (Express + Socket.IO)
+npm run dev:admin    # http://localhost:5173  (Next.js, Turbopack)
+npm run dev:sales    # http://localhost:5174  (Next.js, webpack — see note below)
 ```
 
 Or simply:
@@ -61,6 +63,16 @@ Or simply:
 ```bash
 ./scripts/dev.sh
 ```
+
+Each frontend also supports the standard Next.js production flow independently:
+`npm run build && npm start` (from `admin-web/` or `sales-app/`).
+
+> **Why `sales-app` runs webpack instead of Turbopack**: it uses `@ducanh2912/next-pwa`
+> for the installable PWA shell (offline caching, service worker), which is built on
+> `workbox-webpack-plugin` and has no Turbopack equivalent yet. Next.js 16 defaults to
+> Turbopack, so `sales-app`'s `dev`/`build` scripts pass `--webpack` explicitly — the
+> officially documented opt-out — to keep PWA generation working. `admin-web` has no such
+> constraint and uses Turbopack (the default) normally.
 
 ## Demo credentials
 
@@ -92,6 +104,16 @@ Or simply:
 - **File uploads**: product images and visit photos are stored on local disk under
   `server/uploads/` and served statically at `/uploads/<filename>`. Swap for S3/Cloud Storage
   for a real production deployment.
+- **Frontend architecture**: both `admin-web` and `sales-app` are Next.js 16 App Router
+  apps on React 18.3 (Next 16's peer range explicitly allows React 18.2+, which keeps
+  `react-leaflet@4`, `recharts@2`, and `zustand@4` working without a React 19 rewrite).
+  The backend is a separate, already-standalone Express/Socket.IO service — both frontends
+  call it over plain REST/WebSocket via `NEXT_PUBLIC_API_URL`, the same architecture as
+  before, just without Vite's dev-only `/api` proxy. Auth stays client-side (JWT in
+  localStorage, no server session), matching the original design; protected routes are
+  grouped under an `(app)`/`(dashboard)` route group whose layout does the auth/role
+  check and renders the persistent nav chrome, and Leaflet/react-leaflet (which touch
+  `window`) are loaded via `next/dynamic(..., { ssr: false })` to avoid SSR crashes.
 
 ## Known trade-offs (documented, not hidden)
 

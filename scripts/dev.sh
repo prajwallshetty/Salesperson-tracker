@@ -10,9 +10,9 @@ cd "$(dirname "$0")/.."
 echo "Starting backend, admin dashboard and field app..."
 (cd server && npx tsx watch src/index.ts) &
 SERVER_PID=$!
-(cd admin-web && npx vite --port 5173) &
+(cd admin-web && npm run dev) &
 ADMIN_PID=$!
-(cd sales-app && npx vite --port 5174) &
+(cd sales-app && npm run dev) &
 SALES_PID=$!
 
 trap "kill $SERVER_PID $ADMIN_PID $SALES_PID 2>/dev/null" EXIT

@@ -30,6 +30,18 @@ api.interceptors.response.use(
 );
 
 export function apiErrorMessage(err: unknown, fallback = "Something went wrong"): string {
-  const anyErr = err as any;
-  return anyErr?.response?.data?.error || anyErr?.message || fallback;
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as { error?: string } | undefined;
+    return data?.error || err.message || fallback;
+  }
+  if (err instanceof Error) return err.message || fallback;
+  return fallback;
+}
+
+// Resolves a server-relative asset path (e.g. "/uploads/foo.png") to an absolute URL
+// against the API origin. Absolute URLs (http(s)://, blob:, data:) pass through unchanged.
+export function assetUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^(https?:|blob:|data:)/.test(path)) return path;
+  return `${process.env.NEXT_PUBLIC_API_URL}${path}`;
 }

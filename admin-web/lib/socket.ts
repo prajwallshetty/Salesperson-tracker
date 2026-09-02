@@ -28,8 +28,9 @@ export function disconnectSocket() {
 export function subscribe<T = unknown>(event: string, handler: (payload: T) => void) {
   const s = getSocket();
   if (!s) return () => {};
-  s.on(event, handler as any);
+  const listener = handler as unknown as (...args: unknown[]) => void;
+  s.on(event, listener);
   return () => {
-    s.off(event, handler as any);
+    s.off(event, listener);
   };
 }
