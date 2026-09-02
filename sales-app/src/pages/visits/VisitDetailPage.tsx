@@ -154,7 +154,7 @@ export function VisitDetailPage() {
   }
 
   const isCompleted = visit.status === "COMPLETED";
-  const isCheckedIn = visit.status === "CHECKED_IN";
+  const isCheckedIn = visit.status === "IN_PROGRESS";
 
   return (
     <div>

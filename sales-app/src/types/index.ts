@@ -62,7 +62,7 @@ export interface Customer {
   recentCollections?: Collection[];
 }
 
-export type VisitStatus = "PLANNED" | "CHECKED_IN" | "COMPLETED" | "CANCELLED";
+export type VisitStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "MISSED" | "CANCELLED";
 export type VisitOutcome =
   | "ORDER_PLACED"
   | "FOLLOW_UP_REQUIRED"
