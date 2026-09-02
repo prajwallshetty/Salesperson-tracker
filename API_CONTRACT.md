@@ -153,7 +153,8 @@ Connect: `io("http://localhost:4000", { auth: { token: "<JWT>" } })`
   `{ dailySales, weeklySales, monthlySales, targetAmount, achievementPercent, monthlyOrders,
      monthlyVisits, newCustomers, followUpsCompleted, monthlyCollections, totalDistanceKm,
      workingHours, avgOrderValue }`
-- `GET /api/performance?range=today|week|month` (admin) → ranked leaderboard array with `rank`
+- `GET /api/performance?range=today|week|month` (auth) → ranked leaderboard array with `rank`
+  (available to both roles — salespeople use it to find their own row for comparison)
 
 ## Notifications
 
