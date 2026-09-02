@@ -156,6 +156,7 @@ export type QuotationStatus = "DRAFT" | "SENT" | "ACCEPTED" | "REJECTED";
 
 export interface Quotation {
   id: string;
+  number: string;
   customerId: string;
   customer?: Customer;
   salespersonId: string;
@@ -163,9 +164,10 @@ export interface Quotation {
   notes?: string | null;
   items: LineItem[];
   subtotal: number;
-  taxAmount: number;
-  discountAmount: number;
-  totalAmount: number;
+  taxTotal: number;
+  discountTotal: number;
+  grandTotal: number;
+  convertedOrderId?: string | null;
   createdAt: string;
 }
 
@@ -173,15 +175,18 @@ export type OrderStatus = "CONFIRMED" | "DELIVERED" | "CANCELLED";
 
 export interface Order {
   id: string;
+  number: string;
   customerId: string;
   customer?: Customer;
   salespersonId: string;
   status: OrderStatus;
   items: LineItem[];
   subtotal: number;
-  taxAmount: number;
-  discountAmount: number;
-  totalAmount: number;
+  taxTotal: number;
+  discountTotal: number;
+  grandTotal: number;
+  amountCollected?: number;
+  collections?: Collection[];
   createdAt: string;
 }
 
