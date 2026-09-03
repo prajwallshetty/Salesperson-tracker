@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth";
 import { computeLine, computeDocumentTotals, resolvePricingForItems } from "../services/pricing";
 import { docNumber } from "../utils/geo";
 import { notifyAdmins } from "../services/notifications";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth);
@@ -113,7 +114,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const quotation = await prisma.quotation.findUnique({
       where: { id: req.params.id },
-      include: { items: true, customer: true, salesperson: { include: { user: true } } },
+      include: { items: true, customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
     if (!quotation) return res.status(404).json({ error: "Quotation not found" });
     if (quotation.convertedOrderId) return res.status(409).json({ error: "Already converted" });

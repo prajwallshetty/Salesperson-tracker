@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createSalespersonAccount } from "../services/accounts";
+import { SAFE_USER_SELECT } from "../lib/selects";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from "../utils/dates";
 
 const router = Router();
@@ -120,7 +121,7 @@ router.patch(
         territoryId: data.territoryId,
         managerId: data.managerId,
       },
-      include: { user: true, territory: true },
+      include: { user: { select: SAFE_USER_SELECT }, territory: true },
     });
     res.json(sp);
   })

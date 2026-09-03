@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth";
 import { computeLine, computeDocumentTotals, resolvePricingForItems } from "../services/pricing";
 import { docNumber } from "../utils/geo";
 import { notifyAdmins } from "../services/notifications";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth);
@@ -100,7 +101,11 @@ router.post(
           })),
         },
       },
-      include: { items: { include: { product: true } }, customer: true, salesperson: { include: { user: true } } },
+      include: {
+        items: { include: { product: true } },
+        customer: true,
+        salesperson: { include: { user: { select: SAFE_USER_SELECT } } },
+      },
     });
 
     await notifyAdmins(

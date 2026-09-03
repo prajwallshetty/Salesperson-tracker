@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { hashPassword } from "../lib/auth";
 import { createSalespersonAccount } from "../services/accounts";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth, requireRole("ADMIN"));
@@ -112,6 +113,7 @@ router.post(
     const passwordHash = await hashPassword(data.password);
     const user = await prisma.user.create({
       data: { name: data.name, email, passwordHash, phone: data.phone, role: "ADMIN" },
+      select: SAFE_USER_SELECT,
     });
     res.status(201).json(user);
   })
@@ -152,6 +154,7 @@ router.patch(
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: { name: data.name, phone: data.phone, isActive: data.isActive, role: data.role },
+      select: SAFE_USER_SELECT,
     });
     res.json(user);
   })

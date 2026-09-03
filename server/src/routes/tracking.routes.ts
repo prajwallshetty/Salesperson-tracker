@@ -7,6 +7,7 @@ import { haversineKm } from "../utils/geo";
 import { startOfDay, endOfDay } from "../utils/dates";
 import { notifyAdmins } from "../services/notifications";
 import { getIO } from "../sockets/io";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth);
@@ -205,7 +206,7 @@ router.post(
         lastLng: lng,
         lastSeenAt: now,
       },
-      include: { user: true },
+      include: { user: { select: SAFE_USER_SELECT } },
     });
 
     await prisma.attendance.upsert({
@@ -249,7 +250,7 @@ router.post(
         lastLng: lng,
         lastSeenAt: now,
       },
-      include: { user: true },
+      include: { user: { select: SAFE_USER_SELECT } },
     });
 
     const attendance = await prisma.attendance.findUnique({

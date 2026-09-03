@@ -7,6 +7,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
 import { notifyAdmins } from "../services/notifications";
 import { haversineKm } from "../utils/geo";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth);
@@ -119,7 +120,7 @@ router.post(
     const visit = await prisma.visit.update({
       where: { id: req.params.id },
       data: { status: "IN_PROGRESS", checkInAt: new Date(), checkInLat: lat, checkInLng: lng },
-      include: { customer: true, salesperson: { include: { user: true } } },
+      include: { customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
 
     await prisma.salesperson.update({
@@ -175,7 +176,7 @@ router.post(
         followUpDate: followUpDate ? new Date(followUpDate) : undefined,
         photoUrls: photoUrls ?? undefined,
       },
-      include: { customer: true, salesperson: { include: { user: true } } },
+      include: { customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
 
     if (followUpDate) {

@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { hashPassword } from "../lib/auth";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 export interface CreateSalespersonAccountInput {
   name: string;
@@ -39,7 +40,7 @@ export async function createSalespersonAccount(input: CreateSalespersonAccountIn
       territoryId: input.territoryId || null,
       managerId: input.managerId || null,
     },
-    include: { user: true, territory: true },
+    include: { user: { select: SAFE_USER_SELECT }, territory: true },
   });
   return salesperson;
 }
