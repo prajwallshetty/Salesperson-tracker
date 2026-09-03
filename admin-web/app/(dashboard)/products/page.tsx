@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
 import { Plus, MoreHorizontal, Eye, Pencil, Power, Trash2, Package } from "lucide-react";
@@ -25,8 +25,11 @@ const PAGE_SIZE = 10;
 
 export default function ProductsListPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+  // Pre-fill from ?category= when arriving via a link from the Categories page's
+  // product-count column — a plain query param, not a persisted filter.
+  const [category, setCategory] = useState(searchParams.get("category") ?? "");
   const [isActive, setIsActive] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
   const [page, setPage] = useState(1);

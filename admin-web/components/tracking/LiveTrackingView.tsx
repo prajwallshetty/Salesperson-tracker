@@ -7,16 +7,19 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { X } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { subscribe } from "@/lib/socket";
-import { formatCurrency, formatNumber, relativeTime } from "@/lib/format";
+import { formatCurrency, formatNumber, formatTime, relativeTime } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { onlineIcon, offlineIcon } from "@/components/tracking/mapIcons";
+import { AnimatedSalespersonMarker } from "@/components/tracking/AnimatedSalespersonMarker";
+import { GeocodeSearch, type GeocodeResult } from "@/components/tracking/GeocodeSearch";
+import { pinIcon } from "@/components/tracking/mapIcons";
 import { IconMap } from "@/components/icons";
 import type { LiveSalesperson } from "@/types";
 
 const DEFAULT_CENTER: [number, number] = [12.9716, 77.5946]; // Bangalore
+const searchPinIcon = pinIcon("#f59e0b");
 
 interface LocationUpdatePayload {
   salespersonId: string;
@@ -50,6 +53,7 @@ export default function LiveTrackingView() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [, forceTick] = useState(0);
+  const [searchResult, setSearchResult] = useState<GeocodeResult | null>(null);
 
   const load = () => {
     api
@@ -81,22 +85,30 @@ export default function LiveTrackingView() {
               lastLat: payload.lat,
               lastLng: payload.lng,
               lastSpeed: payload.speed ?? 0,
+              lastHeading: payload.heading ?? null,
+              lastAccuracy: null,
               lastSeenAt: payload.recordedAt,
               todayDistanceKm: payload.todayDistanceKm,
               todayVisits: 0,
               todaySales: 0,
               todayCollections: 0,
+              currentCustomerId: null,
               currentCustomer: null,
+              currentVisitId: null,
               currentVisitStatus: "NONE",
             },
           ];
         }
+        // Only this one salesperson's record changes identity - sibling array entries
+        // (and thus the markers built from them) keep their existing reference and
+        // don't re-render just because a different salesperson moved.
         const next = [...prev];
         next[idx] = {
           ...next[idx],
           lastLat: payload.lat,
           lastLng: payload.lng,
           lastSpeed: payload.speed ?? next[idx].lastSpeed,
+          lastHeading: payload.heading ?? next[idx].lastHeading,
           lastSeenAt: payload.recordedAt,
           todayDistanceKm: payload.todayDistanceKm,
           isOnline: payload.isOnline,
@@ -124,12 +136,18 @@ export default function LiveTrackingView() {
   }, []);
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
+  // NOTE on clustering: react-leaflet-cluster (or similar) is deliberately not added here.
+  // The seeded demo data has 8 salespersons total, and the contract gives no reason to
+  // expect materially more in the near term - a clustering library earns its place once
+  // markers actually start overlapping at the default zoom, not before. Revisit if the
+  // real salesperson count grows into the dozens+.
   const positions = useMemo(
     () => items.filter((i) => i.lastLat && i.lastLng).map((i) => ({ ...i })),
     [items]
   );
   const selectedPosition: [number, number] | null =
     selected && selected.lastLat && selected.lastLng ? [selected.lastLat, selected.lastLng] : null;
+  const searchPosition: [number, number] | null = searchResult ? [searchResult.lat, searchResult.lng] : null;
 
   const mapCenter: [number, number] =
     positions.length > 0 && positions[0].lastLat && positions[0].lastLng
@@ -197,23 +215,20 @@ export default function LiveTrackingView() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
-            <FlyToMarker position={selectedPosition} />
+            <FlyToMarker position={selectedPosition ?? searchPosition} />
             {positions.map((sp) => (
-              <Marker
-                key={sp.id}
-                position={[sp.lastLat as number, sp.lastLng as number]}
-                icon={sp.isOnline ? onlineIcon : offlineIcon}
-                eventHandlers={{ click: () => setSelectedId(sp.id) }}
-              >
+              <AnimatedSalespersonMarker key={sp.id} sp={sp} onClick={() => setSelectedId(sp.id)} />
+            ))}
+            {searchPosition && (
+              <Marker position={searchPosition} icon={searchPinIcon}>
                 <Popup>
-                  <div className="text-xs">
-                    <p className="mb-0.5 font-semibold text-slate-700">{sp.name}</p>
-                    <p>{sp.isOnline ? "Online" : "Offline"} &middot; {relativeTime(sp.lastSeenAt)}</p>
-                  </div>
+                  <div className="text-xs">{searchResult?.displayName}</div>
                 </Popup>
               </Marker>
-            ))}
+            )}
           </MapContainer>
+
+          <GeocodeSearch className="absolute left-4 right-4 top-4 z-[400] sm:right-auto" onSelect={setSearchResult} />
 
           {selected && (
             <div className="absolute bottom-4 right-4 top-4 w-72 overflow-y-auto rounded-2xl border border-border/60 bg-card/95 p-4 shadow-card-hover backdrop-blur">
@@ -232,6 +247,7 @@ export default function LiveTrackingView() {
               <div className="space-y-2 text-sm">
                 <DetailRow label="Status" value={selected.isOnline ? "Online" : "Offline"} />
                 <DetailRow label="Field work" value={selected.fieldWorkStatus.replace("_", " ")} />
+                <DetailRow label="Field work started" value={selected.fieldWorkStartAt ? formatTime(selected.fieldWorkStartAt) : "-"} />
                 <DetailRow
                   label="Location"
                   value={
@@ -242,6 +258,14 @@ export default function LiveTrackingView() {
                 />
                 <DetailRow label="Last updated" value={relativeTime(selected.lastSeenAt)} />
                 <DetailRow label="Speed" value={selected.lastSpeed ? `${selected.lastSpeed.toFixed(1)} km/h` : "-"} />
+                <DetailRow
+                  label="Heading"
+                  value={selected.lastHeading !== null && selected.lastHeading !== undefined ? `${Math.round(selected.lastHeading)}°` : "-"}
+                />
+                <DetailRow
+                  label="GPS accuracy"
+                  value={selected.lastAccuracy !== null && selected.lastAccuracy !== undefined ? `±${Math.round(selected.lastAccuracy)}m` : "-"}
+                />
                 <DetailRow label="Distance today" value={`${selected.todayDistanceKm.toFixed(1)} km`} />
                 <div className="my-2 h-px bg-border/60" />
                 <DetailRow label="Visits today" value={formatNumber(selected.todayVisits)} />
@@ -251,9 +275,21 @@ export default function LiveTrackingView() {
                 <DetailRow label="Current customer" value={selected.currentCustomer ?? "None"} />
                 <DetailRow label="Visit status" value={selected.currentVisitStatus.replace("_", " ")} />
               </div>
-              <Button className="mt-4 w-full" size="sm" onClick={() => router.push(`/routes?salespersonId=${selected.id}`)}>
-                View route history
-              </Button>
+              <div className="mt-4 space-y-2">
+                {selected.currentCustomerId && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    size="sm"
+                    onClick={() => router.push(`/customers/${selected.currentCustomerId}`)}
+                  >
+                    View current customer
+                  </Button>
+                )}
+                <Button className="w-full" size="sm" onClick={() => router.push(`/routes?salespersonId=${selected.id}`)}>
+                  View route history
+                </Button>
+              </div>
             </div>
           )}
         </div>

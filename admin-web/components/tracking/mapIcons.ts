@@ -34,3 +34,36 @@ export const replayIcon = L.divIcon({
 export function pinIcon(color: string) {
   return dotIcon(color, 18);
 }
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+}
+
+// Custom avatar marker for the live tracking map: a circular photo (or initials fallback)
+// badge matching the design system's Avatar component, plus a small online/offline status
+// dot — replaces the plain colored dots used elsewhere (start/end/stop/replay markers keep
+// those, since they're not "a person").
+export function avatarMarkerIcon(opts: { src: string | null; initials: string; online: boolean; size?: number }) {
+  const { src, initials, online, size = 40 } = opts;
+  const dotColor = online ? "hsl(var(--success))" : "hsl(var(--muted-foreground))";
+  const dotSize = Math.round(size * 0.32);
+  const inner = src
+    ? `<img src="${escapeHtml(src)}" style="width:100%;height:100%;object-fit:cover;" />`
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(
+        size * 0.34
+      )}px;color:hsl(var(--primary));background:hsl(var(--primary-soft));">${escapeHtml(initials)}</div>`;
+  const html = `
+    <div style="position:relative;width:${size}px;height:${size}px;">
+      <div style="width:100%;height:100%;border-radius:9999px;overflow:hidden;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);background:#fff;">
+        ${inner}
+      </div>
+      <span style="position:absolute;right:-1px;bottom:-1px;width:${dotSize}px;height:${dotSize}px;border-radius:9999px;background:${dotColor};border:2px solid #fff;"></span>
+    </div>`;
+  return L.divIcon({
+    className: "",
+    html,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2 - 2],
+  });
+}

@@ -31,11 +31,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAuthStore } from "@/store/auth";
 
 interface NavLeaf {
   label: string;
   href?: string;
   icon: React.ComponentType<{ className?: string }>;
+  // Server-side enforcement already exists on every /api/users/* route — this only
+  // hides the nav entry so a non-admin doesn't see a link that would just 403.
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -64,16 +68,16 @@ const GROUPS: NavGroup[] = [
     heading: "Catalog",
     items: [
       { label: "Products", href: "/products", icon: Package },
-      { label: "Categories", icon: Boxes },
-      { label: "Pricing", icon: Tags },
+      { label: "Categories", href: "/categories", icon: Boxes },
+      { label: "Pricing", href: "/pricing", icon: Tags },
     ],
   },
   {
     heading: "Management",
     items: [
-      { label: "Targets", icon: Target },
-      { label: "Territories", icon: MapIcon },
-      { label: "Attendance", icon: ClipboardCheck },
+      { label: "Targets", href: "/targets", icon: Target },
+      { label: "Territories", href: "/territories", icon: MapIcon },
+      { label: "Attendance", href: "/attendance", icon: ClipboardCheck },
       { label: "Performance", href: "/performance", icon: TrendingUp },
       { label: "Reports", href: "/reports", icon: BarChart3 },
     ],
@@ -81,7 +85,7 @@ const GROUPS: NavGroup[] = [
   {
     heading: "Settings",
     items: [
-      { label: "Users & Roles", icon: ShieldCheck },
+      { label: "Users & Roles", href: "/users", icon: ShieldCheck, adminOnly: true },
       { label: "Notifications", href: "/notifications", icon: Bell },
       { label: "Company Settings", href: "/settings", icon: Building2 },
     ],
@@ -97,7 +101,11 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onToggleCollapse, onNavigate, variant = "desktop" }: SidebarProps) {
   const pathname = usePathname();
+  const role = useAuthStore((s) => s.user?.role);
   const isCollapsed = variant === "desktop" && collapsed;
+  const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((item) => !item.adminOnly || role === "ADMIN") })).filter(
+    (g) => g.items.length > 0
+  );
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -114,7 +122,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse, onNavigate, varia
       </div>
 
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
-        {GROUPS.map((group, gi) => (
+        {groups.map((group, gi) => (
           <div key={gi}>
             {group.heading && !isCollapsed && (
               <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
