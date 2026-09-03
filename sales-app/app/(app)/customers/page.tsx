@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import { MapPin, Phone, Search, Users } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
@@ -11,6 +12,7 @@ import { SkeletonList } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { listContainer, listItem, STAGGER_LIMIT } from "@/lib/animations";
 import type { Customer, Paginated } from "@/types";
 
 export default function CustomersPage() {
@@ -85,9 +87,13 @@ export default function CustomersPage() {
             message={search ? "Try a different search term." : "You don't have any assigned customers yet."}
           />
         ) : (
-          <ul className="space-y-3">
-            {customers.map((c) => (
-              <li key={c.id} className="rounded-2xl border border-border/60 bg-card p-4 shadow-card">
+          <motion.ul variants={listContainer} initial="hidden" animate="show" className="space-y-3">
+            {customers.map((c, i) => (
+              <motion.li
+                key={c.id}
+                variants={i < STAGGER_LIMIT ? listItem : undefined}
+                className="rounded-2xl border border-border/60 bg-card p-4 shadow-card"
+              >
                 <Link href={`/customers/${c.id}`} className="block">
                   <p className="font-bold text-foreground">{c.name}</p>
                   {c.address && <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.address}</p>}
@@ -115,9 +121,9 @@ export default function CustomersPage() {
                     {startingVisitFor === c.id ? "Starting…" : "Start Visit"}
                   </Button>
                 </div>
-              </li>
+              </motion.li>
             ))}
-          </ul>
+          </motion.ul>
         )}
       </div>
     </div>
