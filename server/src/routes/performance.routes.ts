@@ -74,25 +74,32 @@ router.get(
       where: { status: "ACTIVE" },
       include: { user: { select: { name: true, avatarUrl: true } } },
     });
+    const ids = salespersons.map((sp) => sp.id);
 
-    const ranking = await Promise.all(
-      salespersons.map(async (sp) => {
-        const [salesAgg, visits, collections] = await Promise.all([
-          prisma.order.aggregate({ where: { salespersonId: sp.id, createdAt: { gte, lte } }, _sum: { grandTotal: true }, _count: true }),
-          prisma.visit.count({ where: { salespersonId: sp.id, createdAt: { gte, lte } } }),
-          prisma.collection.aggregate({ where: { salespersonId: sp.id, collectedAt: { gte, lte } }, _sum: { amount: true } }),
-        ]);
-        return {
-          salespersonId: sp.id,
-          name: sp.user.name,
-          avatarUrl: sp.user.avatarUrl,
-          sales: salesAgg._sum.grandTotal ?? 0,
-          orders: salesAgg._count,
-          visits,
-          collections: collections._sum.amount ?? 0,
-        };
-      })
-    );
+    // Batch the per-salesperson sales/visits/collections stats into one grouped query each
+    // instead of 3 queries per salesperson - this leaderboard is fetched by every user's app.
+    const [salesAggs, visitCounts, collectionAggs] = await Promise.all([
+      prisma.order.groupBy({ by: ["salespersonId"], where: { salespersonId: { in: ids }, createdAt: { gte, lte } }, _sum: { grandTotal: true }, _count: true }),
+      prisma.visit.groupBy({ by: ["salespersonId"], where: { salespersonId: { in: ids }, createdAt: { gte, lte } }, _count: true }),
+      prisma.collection.groupBy({ by: ["salespersonId"], where: { salespersonId: { in: ids }, collectedAt: { gte, lte } }, _sum: { amount: true } }),
+    ]);
+
+    const salesMap = new Map(salesAggs.map((s) => [s.salespersonId, { sum: s._sum.grandTotal ?? 0, count: s._count }]));
+    const visitMap = new Map(visitCounts.map((v) => [v.salespersonId, v._count]));
+    const collectionMap = new Map(collectionAggs.map((c) => [c.salespersonId, c._sum.amount ?? 0]));
+
+    const ranking = salespersons.map((sp) => {
+      const sales = salesMap.get(sp.id);
+      return {
+        salespersonId: sp.id,
+        name: sp.user.name,
+        avatarUrl: sp.user.avatarUrl,
+        sales: sales?.sum ?? 0,
+        orders: sales?.count ?? 0,
+        visits: visitMap.get(sp.id) ?? 0,
+        collections: collectionMap.get(sp.id) ?? 0,
+      };
+    });
 
     ranking.sort((a, b) => b.sales - a.sales);
     res.json(ranking.map((r, i) => ({ ...r, rank: i + 1 })));

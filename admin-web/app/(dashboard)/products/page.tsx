@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
 import { Plus, MoreHorizontal, Eye, Pencil, Power, Trash2, Package } from "lucide-react";
 import { api, apiErrorMessage, assetUrl } from "@/lib/api";
@@ -140,8 +141,14 @@ export default function ProductsListPage() {
                   <button onClick={() => router.push(`/products/${p.id}`)} className="flex items-center gap-3 text-left">
                     <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
                       {p.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={assetUrl(p.imageUrl) ?? undefined} alt={p.name} className="h-full w-full object-cover" />
+                        <Image
+                          src={assetUrl(p.imageUrl) as string}
+                          alt={p.name}
+                          width={40}
+                          height={40}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         <Package className="size-5" />
                       )}

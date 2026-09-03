@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Camera, Check, Clock, MapPin, CalendarIcon } from "lucide-react";
@@ -258,10 +259,16 @@ export default function VisitDetailPage() {
                     href={resolvePhotoUrl(url)}
                     target="_blank"
                     rel="noreferrer"
-                    className="aspect-square overflow-hidden rounded-xl bg-muted"
+                    className="relative aspect-square overflow-hidden rounded-xl bg-muted"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={resolvePhotoUrl(url)} alt="Visit" className="h-full w-full object-cover" />
+                    <Image
+                      src={resolvePhotoUrl(url)}
+                      alt="Visit"
+                      fill
+                      sizes="(max-width: 480px) 33vw, 160px"
+                      loading="lazy"
+                      className="object-cover"
+                    />
                   </a>
                 ))}
               </div>

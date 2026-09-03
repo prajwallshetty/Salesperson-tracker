@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
+import { Pagination } from "@/components/Pagination";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
 import type { Visit } from "@/types";
 
 const STATUSES = ["PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
+const PAGE_SIZE = 10;
 
 const OUTCOME_LABEL: Record<string, string> = {
   ORDER_PLACED: "Order Placed",
@@ -34,6 +36,7 @@ export default function VisitsListPage() {
   const [to, setTo] = useState("");
   const [items, setItems] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
@@ -52,6 +55,14 @@ export default function VisitsListPage() {
   };
 
   useEffect(load, [status, salespersonId, from, to]);
+  useEffect(() => {
+    const t = setTimeout(() => setPage(1), 0);
+    return () => clearTimeout(t);
+  }, [status, salespersonId, from, to]);
+
+  // Visits has no server-side pagination (see API_CONTRACT.md), so paginate
+  // the fetched array client-side to avoid rendering hundreds of rows at once.
+  const pageItems = useMemo(() => items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [items, page]);
 
   return (
     <div className="space-y-5">
@@ -96,7 +107,7 @@ export default function VisitsListPage() {
               </TableCell>
             </TableRow>
           ) : (
-            items.map((v) => (
+            pageItems.map((v) => (
               <TableRow key={v.id}>
                 <TableCell className="font-medium text-foreground">{v.customer?.name ?? "-"}</TableCell>
                 <TableCell className="text-muted-foreground">{v.salesperson?.user?.name ?? "-"}</TableCell>
@@ -111,6 +122,9 @@ export default function VisitsListPage() {
           )}
         </TableBody>
       </Table>
+      {!loading && items.length > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={items.length} onPageChange={setPage} />
+      )}
     </div>
   );
 }

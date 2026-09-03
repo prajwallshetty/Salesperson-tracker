@@ -7,6 +7,7 @@ import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
+import { Pagination } from "@/components/Pagination";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
 import type { Quotation } from "@/types";
 
 const STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED"];
+const PAGE_SIZE = 10;
 
 export default function QuotationsListPage() {
   const salespersons = useSalespersonOptions();
@@ -29,6 +31,7 @@ export default function QuotationsListPage() {
   const [items, setItems] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
@@ -40,7 +43,13 @@ export default function QuotationsListPage() {
   };
 
   useEffect(load, [status, salespersonId]);
+  useEffect(() => {
+    const t = setTimeout(() => setPage(1), 0);
+    return () => clearTimeout(t);
+  }, [status, salespersonId, from, to]);
 
+  // Quotations has no server-side pagination (see API_CONTRACT.md), so
+  // paginate the fetched+filtered array client-side.
   const filtered = useMemo(
     () =>
       items.filter((q) => {
@@ -49,6 +58,10 @@ export default function QuotationsListPage() {
         return true;
       }),
     [items, from, to]
+  );
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
   );
 
   const updateStatus = async (q: Quotation, next: string) => {
@@ -117,7 +130,7 @@ export default function QuotationsListPage() {
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((q) => (
+            pageItems.map((q) => (
               <TableRow key={q.id}>
                 <TableCell className="font-medium text-foreground">{q.customer?.name ?? "-"}</TableCell>
                 <TableCell className="text-muted-foreground">{q.salesperson?.user?.name ?? "-"}</TableCell>
@@ -153,6 +166,9 @@ export default function QuotationsListPage() {
           )}
         </TableBody>
       </Table>
+      {!loading && filtered.length > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+      )}
     </div>
   );
 }

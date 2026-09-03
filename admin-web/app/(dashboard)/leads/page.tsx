@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SearchInput } from "@/components/SearchInput";
 import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
+import { Pagination } from "@/components/Pagination";
 import { SkeletonRow } from "@/components/Skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +18,7 @@ import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
 import type { Lead } from "@/types";
 
 const STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "NEGOTIATION", "CONVERTED", "LOST"];
+const PAGE_SIZE = 10;
 
 export default function LeadsListPage() {
   const salespersons = useSalespersonOptions();
@@ -27,6 +29,7 @@ export default function LeadsListPage() {
   const [to, setTo] = useState("");
   const [items, setItems] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
@@ -38,7 +41,13 @@ export default function LeadsListPage() {
   };
 
   useEffect(load, [status, salespersonId, search]);
+  useEffect(() => {
+    const t = setTimeout(() => setPage(1), 0);
+    return () => clearTimeout(t);
+  }, [status, salespersonId, search, from, to]);
 
+  // Leads has no server-side pagination (see API_CONTRACT.md), so paginate
+  // the fetched+filtered array client-side.
   const filtered = useMemo(() => {
     return items.filter((l) => {
       if (from && new Date(l.createdAt) < new Date(from)) return false;
@@ -46,6 +55,10 @@ export default function LeadsListPage() {
       return true;
     });
   }, [items, from, to]);
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  );
 
   const updateStatus = async (lead: Lead, next: string) => {
     try {
@@ -95,7 +108,7 @@ export default function LeadsListPage() {
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((l) => (
+            pageItems.map((l) => (
               <TableRow key={l.id}>
                 <TableCell>
                   <p className="font-medium text-foreground">{l.name}</p>
@@ -123,6 +136,9 @@ export default function LeadsListPage() {
           )}
         </TableBody>
       </Table>
+      {!loading && filtered.length > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+      )}
     </div>
   );
 }

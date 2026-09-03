@@ -6,6 +6,7 @@ import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
+import { Pagination } from "@/components/Pagination";
 import { SkeletonRow } from "@/components/Skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +17,7 @@ import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
 import type { Order } from "@/types";
 
 const STATUSES = ["CONFIRMED", "DELIVERED", "CANCELLED"];
+const PAGE_SIZE = 10;
 
 export default function OrdersListPage() {
   const salespersons = useSalespersonOptions();
@@ -25,6 +27,7 @@ export default function OrdersListPage() {
   const [to, setTo] = useState("");
   const [items, setItems] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
@@ -42,9 +45,20 @@ export default function OrdersListPage() {
   };
 
   useEffect(load, [salespersonId, from, to]);
+  useEffect(() => {
+    const t = setTimeout(() => setPage(1), 0);
+    return () => clearTimeout(t);
+  }, [salespersonId, status, from, to]);
 
+  // Orders has no server-side pagination (see API_CONTRACT.md), so paginate
+  // the fetched+filtered array client-side to avoid rendering hundreds of
+  // rows into the DOM at once.
   const filtered = useMemo(() => (status ? items.filter((o) => o.status === status) : items), [items, status]);
   const total = filtered.reduce((sum, o) => sum + o.grandTotal, 0);
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  );
 
   const updateStatus = async (o: Order, next: string) => {
     try {
@@ -111,7 +125,7 @@ export default function OrdersListPage() {
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((o) => (
+            pageItems.map((o) => (
               <TableRow key={o.id}>
                 <TableCell className="font-medium text-foreground">{o.number}</TableCell>
                 <TableCell className="text-muted-foreground">{o.customer?.name ?? "-"}</TableCell>
@@ -138,6 +152,9 @@ export default function OrdersListPage() {
           )}
         </TableBody>
       </Table>
+      {!loading && filtered.length > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+      )}
     </div>
   );
 }

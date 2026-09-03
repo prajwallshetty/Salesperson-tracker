@@ -284,6 +284,7 @@ model Visit {
   @@index([salespersonId, createdAt])
   @@index([customerId])
   @@index([status])
+  @@index([createdAt])
 }
 
 model Lead {
@@ -383,6 +384,7 @@ model Order {
 
   @@index([salespersonId, createdAt])
   @@index([customerId])
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -412,6 +414,7 @@ model Collection {
   collectedAt   DateTime         @default(now())
 
   @@index([salespersonId, collectedAt])
+  @@index([collectedAt])
 }
 
 model Notification {

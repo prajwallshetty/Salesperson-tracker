@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { MotionConfig } from "framer-motion";
 import { Toaster, toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
 import { useFieldWorkStore } from "@/store/fieldwork";
@@ -63,7 +64,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   return (
-    <>
+    // reducedMotion="user" makes every Framer Motion element in the app defer to the OS-level
+    // "reduce motion" accessibility setting automatically (transforms/scale/slide are skipped,
+    // opacity fades still play) — no per-component prefers-reduced-motion checks needed.
+    <MotionConfig reducedMotion="user">
       <Toaster
         position="top-center"
         richColors
@@ -76,6 +80,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }}
       />
       {children}
-    </>
+    </MotionConfig>
   );
 }

@@ -62,11 +62,18 @@ export default function LeadsPage() {
   useEffect(load, []);
 
   async function updateStatus(lead: Lead, status: LeadStatus) {
+    // Optimistic UI: a lead's pipeline status is not a financial/state-critical field (unlike
+    // orders/quotations/collections/visit check-in-out), so reflect the pick immediately —
+    // the Select is controlled by lead.status, and waiting for the round-trip would otherwise
+    // make it visibly snap back to the old value for a moment before jumping to the new one.
+    const previous = lead;
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, status } : l)));
     try {
       const res = await api.patch<Lead>(`/leads/${lead.id}`, { status });
       setLeads((prev) => prev.map((l) => (l.id === lead.id ? res.data : l)));
       toast.success("Lead updated");
     } catch (err) {
+      setLeads((prev) => prev.map((l) => (l.id === lead.id ? previous : l)));
       toast.error(apiErrorMessage(err, "Could not update lead"));
     }
   }

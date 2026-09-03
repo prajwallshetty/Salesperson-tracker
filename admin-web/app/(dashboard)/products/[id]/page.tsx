@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
 import { ArrowLeft, Package, Pencil } from "lucide-react";
 import { api, apiErrorMessage, assetUrl } from "@/lib/api";
@@ -63,8 +64,14 @@ export default function ProductDetailPage() {
           <div className="flex items-center gap-4">
             <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground">
               {product.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={assetUrl(product.imageUrl) ?? undefined} alt={product.name} className="h-full w-full object-cover" />
+                <Image
+                  src={assetUrl(product.imageUrl) as string}
+                  alt={product.name}
+                  width={80}
+                  height={80}
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <Package className="size-8" />
               )}

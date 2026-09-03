@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
@@ -22,9 +23,16 @@ import { formatCurrency, formatKm } from "@/lib/format";
 import { ProgressRing } from "@/components/ProgressRing";
 import { StatCard } from "@/components/StatCard";
 import { Skeleton } from "@/components/Skeleton";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { fadeIn } from "@/lib/animations";
 import type { PerformanceSummary, Salesperson } from "@/types";
+
+// The confirm sheet (built on the vaul Drawer) is only needed once the salesperson actually
+// taps "End Field Work" — not on first paint — so load it on demand instead of pulling vaul
+// into the home page's initial JS bundle.
+const ConfirmDialog = dynamic(() => import("@/components/ConfirmDialog").then((m) => m.ConfirmDialog), {
+  ssr: false,
+});
 
 interface DailyTarget {
   targetAmount: number;
@@ -59,8 +67,21 @@ function greeting() {
 
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
-  const { status, tracking, fieldWorkStartAt, todayDistanceKm, starting, ending, geoErrorMessage, startFieldWork, endFieldWork } =
-    useFieldWorkStore();
+  // Selector-based subscriptions only — the fieldwork store's `lastPoint` field changes on
+  // every single GPS tick while tracking is active. Destructuring the whole store here (the
+  // previous `useFieldWorkStore()` call with no selector) re-subscribed this entire page —
+  // stat grid, target ring, Framer Motion entrance — to every field change, so it re-rendered
+  // on every GPS fix even though it never reads `lastPoint`. Each selector below only
+  // re-renders this component when that specific slice changes.
+  const status = useFieldWorkStore((s) => s.status);
+  const tracking = useFieldWorkStore((s) => s.tracking);
+  const fieldWorkStartAt = useFieldWorkStore((s) => s.fieldWorkStartAt);
+  const todayDistanceKm = useFieldWorkStore((s) => s.todayDistanceKm);
+  const starting = useFieldWorkStore((s) => s.starting);
+  const ending = useFieldWorkStore((s) => s.ending);
+  const geoErrorMessage = useFieldWorkStore((s) => s.geoErrorMessage);
+  const startFieldWork = useFieldWorkStore((s) => s.startFieldWork);
+  const endFieldWork = useFieldWorkStore((s) => s.endFieldWork);
 
   const [summary, setSummary] = useState<PerformanceSummary | null>(null);
   const [selfSp, setSelfSp] = useState<Salesperson | null>(null);
@@ -134,7 +155,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="px-4 pb-6 pt-5">
+    <motion.div variants={fadeIn} initial="hidden" animate="show" className="px-4 pb-6 pt-5">
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">
@@ -228,8 +249,9 @@ export default function HomePage() {
         <Skeleton className="mb-5 h-40 w-full" />
       ) : target ? (
         <motion.div
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
+          variants={fadeIn}
+          initial="hidden"
+          animate="show"
           className="mb-5 flex items-center gap-5 rounded-2xl border border-border/60 bg-card p-5 shadow-card"
         >
           <ProgressRing percent={percent} label={`${percent}%`} sublabel={target.label} />
@@ -273,6 +295,6 @@ export default function HomePage() {
         onConfirm={handleEndConfirmed}
         onCancel={() => setConfirmEnd(false)}
       />
-    </div>
+    </motion.div>
   );
 }

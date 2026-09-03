@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { motion } from "framer-motion";
 import { MapPinned } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
@@ -11,6 +12,7 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { SkeletonList } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/badge";
+import { listContainer, listItem, STAGGER_LIMIT } from "@/lib/animations";
 import type { Visit, VisitStatus } from "@/types";
 
 type Tab = "IN_PROGRESS" | "PLANNED" | "COMPLETED";
@@ -62,8 +64,8 @@ export default function VisitsPage() {
         ) : visits.length === 0 ? (
           <EmptyState icon={<MapPinned />} title={EMPTY_COPY[tab].title} message={EMPTY_COPY[tab].message} />
         ) : (
-          <ul className="space-y-3">
-            {visits.map((v) => {
+          <motion.ul variants={listContainer} initial="hidden" animate="show" className="space-y-3">
+            {visits.map((v, i) => {
               const timeLabel =
                 v.status === "COMPLETED" && v.checkOutAt
                   ? `Checked out ${format(new Date(v.checkOutAt), "d MMM, h:mm a")}`
@@ -73,7 +75,7 @@ export default function VisitsPage() {
                       ? `Planned for ${format(new Date(v.plannedAt), "d MMM, h:mm a")}`
                       : `Added ${format(new Date(v.createdAt), "d MMM yyyy")}`;
               return (
-                <li key={v.id}>
+                <motion.li key={v.id} variants={i < STAGGER_LIMIT ? listItem : undefined}>
                   <Link
                     href={`/visits/${v.id}`}
                     className="block rounded-2xl border border-border/60 bg-card p-4 shadow-card"
@@ -91,10 +93,10 @@ export default function VisitsPage() {
                     </div>
                     <p className="mt-2.5 text-xs font-medium text-muted-foreground">{timeLabel}</p>
                   </Link>
-                </li>
+                </motion.li>
               );
             })}
-          </ul>
+          </motion.ul>
         )}
       </div>
     </div>

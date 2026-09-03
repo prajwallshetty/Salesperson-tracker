@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Users, UserCheck, Package, ShoppingCart, FileText, Flame, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -32,10 +32,42 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const [results, setResults] = useState<Results>(EMPTY);
   const [loading, setLoading] = useState(false);
 
+  // Orders and quotations have no server-side search param (see
+  // API_CONTRACT.md), so instead of re-fetching the full list on every
+  // keystroke, fetch each once per palette session (on open) and filter the
+  // cached copy client-side as the query changes.
+  const ordersCache = useRef<Order[] | null>(null);
+  const quotationsCache = useRef<Quotation[] | null>(null);
+
   useEffect(() => {
     if (!open) {
       setQuery("");
       setResults(EMPTY);
+      // Drop the cache on close so the next session sees fresh data instead
+      // of carrying an arbitrarily stale copy for the component's lifetime.
+      ordersCache.current = null;
+      quotationsCache.current = null;
+      return;
+    }
+    if (ordersCache.current === null) {
+      api
+        .get("/orders")
+        .then((res) => {
+          ordersCache.current = res.data ?? [];
+        })
+        .catch(() => {
+          ordersCache.current = [];
+        });
+    }
+    if (quotationsCache.current === null) {
+      api
+        .get("/quotations")
+        .then((res) => {
+          quotationsCache.current = res.data ?? [];
+        })
+        .catch(() => {
+          quotationsCache.current = [];
+        });
     }
   }, [open]);
 
@@ -52,14 +84,12 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         api.get("/customers", { params: { search: q, pageSize: 5 } }).catch(() => ({ data: { items: [] } })),
         api.get("/products", { params: { search: q, pageSize: 5 } }).catch(() => ({ data: { items: [] } })),
         api.get("/leads", { params: { search: q } }).catch(() => ({ data: [] })),
-        api.get("/orders").catch(() => ({ data: [] })),
-        api.get("/quotations").catch(() => ({ data: [] })),
-      ]).then(([sp, cu, pr, le, or, qu]) => {
+      ]).then(([sp, cu, pr, le]) => {
         const lower = q.toLowerCase();
-        const orders: Order[] = (or.data ?? []).filter(
+        const orders: Order[] = (ordersCache.current ?? []).filter(
           (o: Order) => o.number?.toLowerCase().includes(lower) || o.customer?.name?.toLowerCase().includes(lower)
         );
-        const quotations: Quotation[] = (qu.data ?? []).filter((qt: Quotation) =>
+        const quotations: Quotation[] = (quotationsCache.current ?? []).filter((qt: Quotation) =>
           qt.customer?.name?.toLowerCase().includes(lower)
         );
         setResults({
@@ -72,7 +102,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         });
         setLoading(false);
       });
-    }, 250);
+    }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 

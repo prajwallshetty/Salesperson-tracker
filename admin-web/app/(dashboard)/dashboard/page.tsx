@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { Users, UserCheck, Wallet, TrendingUp, Footprints, CalendarClock, ShoppingCart, PiggyBank, Target, Radar } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { staggerItem, staggerDelay, fadeOnly } from "@/lib/animations";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { PageHeader } from "@/components/PageHeader";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SalesChart } from "@/components/dashboard/SalesChart";
@@ -23,6 +25,8 @@ const LiveTrackingCard = dynamic(() => import("@/components/dashboard/LiveTracki
 });
 
 export default function DashboardPage() {
+  const reduceMotion = useReducedMotion();
+  const kpiVariants = reduceMotion ? fadeOnly(staggerItem) : staggerItem;
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [drilldown, setDrilldown] = useState<DrilldownKind>(null);
@@ -142,9 +146,10 @@ export default function DashboardPage() {
           : cards.map((c, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: i * 0.03 }}
+                initial="hidden"
+                animate="visible"
+                variants={kpiVariants}
+                transition={{ duration: 0.2, delay: staggerDelay(i) }}
               >
                 <KpiCard
                   label={c.label}
