@@ -1,14 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-
+// Server Component: no client JS needed for a bare redirect. Auth gating
+// still happens client-side in `(dashboard)/layout.tsx`, same as before.
 export default function RootPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace("/dashboard");
-  }, [router]);
-
-  return null;
+  redirect("/dashboard");
 }
