@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, apiErrorMessage } from "@/lib/api";
-import { SelectField } from "@/components/FormField";
+import { PageHeader } from "@/components/PageHeader";
+import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { IconRoute } from "@/components/icons";
 import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
@@ -52,73 +55,62 @@ export default function VisitsListPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Visits</h1>
-        <p className="text-sm text-slate-400">Monitor field visits across your entire sales team.</p>
-      </div>
+      <PageHeader title="Visits" description="Monitor field visits across your entire sales team." />
 
       <div className="flex flex-wrap items-center gap-3">
-        <SelectField value={status} onChange={(e) => setStatus(e.target.value)} className="w-auto max-w-[170px]">
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replace(/_/g, " ")}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)} className="w-auto max-w-[190px]">
-          <option value="">All salespersons</option>
-          {salespersons.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.user.name}
-            </option>
-          ))}
-        </SelectField>
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
-        <span className="text-sm text-slate-400">to</span>
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+        <FilterSelect
+          value={status}
+          onChange={setStatus}
+          placeholder="All statuses"
+          options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))}
+        />
+        <FilterSelect
+          value={salespersonId}
+          onChange={setSalespersonId}
+          placeholder="All salespersons"
+          options={salespersons.map((s) => ({ value: s.id, label: s.user.name }))}
+        />
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
+        <span className="text-sm text-muted-foreground">to</span>
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Salesperson</th>
-                <th className="px-4 py-3 font-medium">Check-in</th>
-                <th className="px-4 py-3 font-medium">Check-out</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Outcome</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10">
-                    <EmptyState icon={<IconRoute className="h-6 w-6" />} title="No visits found" message="Field visits logged by the sales team will appear here." />
-                  </td>
-                </tr>
-              ) : (
-                items.map((v) => (
-                  <tr key={v.id} className="transition hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-700">{v.customer?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{v.salesperson?.user?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{v.checkInAt ? formatDateTime(v.checkInAt) : "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{v.checkOutAt ? formatDateTime(v.checkOutAt) : "-"}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={v.status} />
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{v.outcome ? OUTCOME_LABEL[v.outcome] ?? v.outcome : "-"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Customer</TableHead>
+            <TableHead>Salesperson</TableHead>
+            <TableHead>Check-in</TableHead>
+            <TableHead>Check-out</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Outcome</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
+          ) : items.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="py-10">
+                <EmptyState icon={<IconRoute className="size-5" />} title="No visits found" message="Field visits logged by the sales team will appear here." />
+              </TableCell>
+            </TableRow>
+          ) : (
+            items.map((v) => (
+              <TableRow key={v.id}>
+                <TableCell className="font-medium text-foreground">{v.customer?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{v.salesperson?.user?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{v.checkInAt ? formatDateTime(v.checkInAt) : "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{v.checkOutAt ? formatDateTime(v.checkOutAt) : "-"}</TableCell>
+                <TableCell>
+                  <StatusBadge status={v.status} />
+                </TableCell>
+                <TableCell className="text-muted-foreground">{v.outcome ? OUTCOME_LABEL[v.outcome] ?? v.outcome : "-"}</TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
