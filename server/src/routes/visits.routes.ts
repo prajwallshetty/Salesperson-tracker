@@ -30,20 +30,58 @@ const upload = multer({
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const { status, salespersonId, customerId, from, to } = req.query as Record<string, string>;
+    const {
+      status,
+      outcome,
+      salespersonId,
+      customerId,
+      territoryId,
+      from,
+      dateFrom,
+      to,
+      dateTo,
+      page,
+      pageSize,
+    } = req.query as Record<string, string>;
     const where: any = {};
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (status) where.status = status;
+    if (outcome) where.outcome = outcome;
     if (customerId) where.customerId = customerId;
-    if (from || to) {
+    // dateFrom/dateTo are aliases for from/to (either name works) - kept both so existing
+    // callers using from/to keep working unchanged.
+    const gte = dateFrom || from;
+    const lte = dateTo || to;
+    if (gte || lte) {
       where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to);
+      if (gte) where.createdAt.gte = new Date(gte);
+      if (lte) where.createdAt.lte = new Date(lte);
     }
+    if (territoryId) {
+      // A visit doesn't carry its own territoryId - match through either the customer's or the
+      // salesperson's territory (a visit can be "in" a territory via either relationship).
+      where.OR = [{ customer: { territoryId } }, { salesperson: { territoryId } }];
+    }
+
+    const include = { customer: true, salesperson: { include: { user: { select: { name: true } } } } } as const;
+
+    // Pagination is opt-in: passing page/pageSize returns the paginated {items,total,page,pageSize}
+    // shape; omitting them preserves the original bare-array response (capped at 200) so existing
+    // callers are unaffected.
+    if (page !== undefined || pageSize !== undefined) {
+      const take = Math.min(parseInt(pageSize, 10) || 20, 200);
+      const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
+      const [items, total] = await Promise.all([
+        prisma.visit.findMany({ where, include, orderBy: { createdAt: "desc" }, take, skip }),
+        prisma.visit.count({ where }),
+      ]);
+      return res.json({ items, total, page: Math.max(parseInt(page, 10) || 1, 1), pageSize: take });
+    }
+
     const visits = await prisma.visit.findMany({
       where,
-      include: { customer: true, salesperson: { include: { user: { select: { name: true } } } } },
+      include,
       orderBy: { createdAt: "desc" },
       take: 200,
     });

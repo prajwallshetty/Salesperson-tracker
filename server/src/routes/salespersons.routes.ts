@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { hashPassword } from "../lib/auth";
+import { createSalespersonAccount } from "../services/accounts";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from "../utils/dates";
 
 const router = Router();
@@ -65,28 +65,7 @@ router.post(
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
     const data = createSchema.parse(req.body);
-    const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
-    if (existing) return res.status(409).json({ error: "Email already in use" });
-
-    const passwordHash = await hashPassword(data.password);
-    const user = await prisma.user.create({
-      data: {
-        name: data.name,
-        email: data.email.toLowerCase(),
-        passwordHash,
-        phone: data.phone,
-        role: "SALESPERSON",
-      },
-    });
-    const salesperson = await prisma.salesperson.create({
-      data: {
-        userId: user.id,
-        employeeCode: data.employeeCode,
-        territoryId: data.territoryId || null,
-        managerId: data.managerId || null,
-      },
-      include: { user: true, territory: true },
-    });
+    const salesperson = await createSalespersonAccount(data);
     res.status(201).json(salesperson);
   })
 );

@@ -11,6 +11,18 @@ import { getIO } from "../sockets/io";
 const router = Router();
 router.use(requireAuth);
 
+// A salesperson using the REST ping fallback (no live socket) never has anything flip
+// `isOnline` back to false if their device goes dark (killed app, dead battery, lost signal)
+// without an explicit field-work/end call - the socket path has a 20s disconnect grace period,
+// but nothing analogous exists for REST-only clients. Bug fix: treat a salesperson as online only
+// if the raw flag is set AND their last ping is recent: derived at read time here, so it never
+// touches the stored isOnline value or the write path's behavior.
+const STALE_ONLINE_MS = 3 * 60 * 1000;
+function isEffectivelyOnline(sp: { isOnline: boolean; lastSeenAt: Date | null }): boolean {
+  if (!sp.isOnline || !sp.lastSeenAt) return false;
+  return Date.now() - sp.lastSeenAt.getTime() < STALE_ONLINE_MS;
+}
+
 router.get(
   "/live",
   requireRole("ADMIN"),
@@ -29,7 +41,7 @@ router.get(
 
     // Batch the per-salesperson stats into one query each (grouped by salespersonId) instead of
     // firing 4 queries per salesperson - this endpoint is polled continuously by the live map.
-    const [visitCounts, inProgressVisits, orderSums, collectionSums] = await Promise.all([
+    const [visitCounts, inProgressVisits, orderSums, collectionSums, latestPings] = await Promise.all([
       prisma.visit.groupBy({
         by: ["salespersonId"],
         where: { salespersonId: { in: ids }, createdAt: todayRange },
@@ -50,11 +62,25 @@ router.get(
         where: { salespersonId: { in: ids }, collectedAt: todayRange },
         _sum: { amount: true },
       }),
+      // Salesperson.lastLat/lastLng/lastSpeed is the "current location" cache, but it has no
+      // lastHeading/lastAccuracy columns - that data only exists per-ping in LocationPing
+      // history. Reading the single freshest ping per salesperson (via DISTINCT ON, backed by
+      // the existing (salespersonId, recordedAt) index) surfaces heading/accuracy for the live
+      // map without writing anything back or altering the history/cache separation.
+      ids.length
+        ? prisma.$queryRaw<Array<{ salespersonId: string; heading: number | null; accuracy: number | null }>>`
+            SELECT DISTINCT ON ("salespersonId") "salespersonId", "heading", "accuracy"
+            FROM "LocationPing"
+            WHERE "salespersonId" = ANY(${ids})
+            ORDER BY "salespersonId", "recordedAt" DESC
+          `
+        : Promise.resolve([]),
     ]);
 
     const todayVisitsMap = new Map(visitCounts.map((v) => [v.salespersonId, v._count]));
     const todaySalesMap = new Map(orderSums.map((o) => [o.salespersonId, o._sum.grandTotal ?? 0]));
     const todayCollectionsMap = new Map(collectionSums.map((c) => [c.salespersonId, c._sum.amount ?? 0]));
+    const latestPingMap = new Map(latestPings.map((p) => [p.salespersonId, p]));
     // inProgressVisits is ordered by checkInAt desc, so the first occurrence per salesperson is
     // their most recent in-progress visit (matches the previous per-row findFirst semantics).
     const currentVisitMap = new Map<string, (typeof inProgressVisits)[number]>();
@@ -64,23 +90,28 @@ router.get(
 
     const enriched = salespersons.map((sp) => {
       const currentVisit = currentVisitMap.get(sp.id);
+      const latestPing = latestPingMap.get(sp.id);
       return {
         id: sp.id,
         name: sp.user.name,
         avatarUrl: sp.user.avatarUrl,
         territory: sp.territory?.name ?? null,
-        isOnline: sp.isOnline,
+        isOnline: isEffectivelyOnline(sp),
         fieldWorkStatus: sp.fieldWorkStatus,
         fieldWorkStartAt: sp.fieldWorkStartAt,
         lastLat: sp.lastLat,
         lastLng: sp.lastLng,
         lastSpeed: sp.lastSpeed,
+        lastHeading: latestPing?.heading ?? null,
+        lastAccuracy: latestPing?.accuracy ?? null,
         lastSeenAt: sp.lastSeenAt,
         todayDistanceKm: sp.todayDistanceKm,
         todayVisits: todayVisitsMap.get(sp.id) ?? 0,
         todaySales: todaySalesMap.get(sp.id) ?? 0,
         todayCollections: todayCollectionsMap.get(sp.id) ?? 0,
+        currentCustomerId: currentVisit?.customerId ?? null,
         currentCustomer: currentVisit?.customer.name ?? null,
+        currentVisitId: currentVisit?.id ?? null,
         currentVisitStatus: currentVisit?.status ?? "NONE",
       };
     });
