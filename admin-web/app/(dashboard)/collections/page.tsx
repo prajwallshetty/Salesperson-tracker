@@ -6,6 +6,7 @@ import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
+import { Pagination } from "@/components/Pagination";
 import { SkeletonRow } from "@/components/Skeleton";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,6 +16,7 @@ import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
 import type { Collection } from "@/types";
 
 const METHODS = ["CASH", "CHEQUE", "UPI", "BANK_TRANSFER", "CARD", "OTHER"];
+const PAGE_SIZE = 10;
 
 export default function CollectionsListPage() {
   const salespersons = useSalespersonOptions();
@@ -24,6 +26,7 @@ export default function CollectionsListPage() {
   const [to, setTo] = useState("");
   const [items, setItems] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
@@ -37,9 +40,19 @@ export default function CollectionsListPage() {
   };
 
   useEffect(load, [salespersonId, from, to]);
+  useEffect(() => {
+    const t = setTimeout(() => setPage(1), 0);
+    return () => clearTimeout(t);
+  }, [salespersonId, method, from, to]);
 
+  // Collections has no server-side pagination (see API_CONTRACT.md), so
+  // paginate the fetched+filtered array client-side.
   const filtered = useMemo(() => (method ? items.filter((c) => c.method === method) : items), [items, method]);
   const total = filtered.reduce((sum, c) => sum + c.amount, 0);
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  );
 
   return (
     <div className="space-y-5">
@@ -94,7 +107,7 @@ export default function CollectionsListPage() {
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((c) => (
+            pageItems.map((c) => (
               <TableRow key={c.id}>
                 <TableCell className="font-medium text-foreground">{c.customer?.name ?? "-"}</TableCell>
                 <TableCell className="text-muted-foreground">{c.salesperson?.user?.name ?? "-"}</TableCell>
@@ -106,6 +119,9 @@ export default function CollectionsListPage() {
           )}
         </TableBody>
       </Table>
+      {!loading && filtered.length > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
+import { Pagination } from "@/components/Pagination";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
 import type { FollowUp } from "@/types";
 
 const STATUSES = ["PENDING", "OVERDUE", "COMPLETED", "CANCELLED"];
+const PAGE_SIZE = 10;
 
 export default function FollowUpsListPage() {
   const salespersons = useSalespersonOptions();
@@ -28,6 +30,7 @@ export default function FollowUpsListPage() {
   const [items, setItems] = useState<FollowUp[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
@@ -39,7 +42,13 @@ export default function FollowUpsListPage() {
   };
 
   useEffect(load, [status, salespersonId]);
+  useEffect(() => {
+    const t = setTimeout(() => setPage(1), 0);
+    return () => clearTimeout(t);
+  }, [status, salespersonId, from, to]);
 
+  // Follow-ups has no server-side pagination (see API_CONTRACT.md), so
+  // paginate the fetched+filtered array client-side.
   const filtered = useMemo(
     () =>
       items.filter((f) => {
@@ -48,6 +57,10 @@ export default function FollowUpsListPage() {
         return true;
       }),
     [items, from, to]
+  );
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
   );
 
   const complete = async (f: FollowUp) => {
@@ -106,7 +119,7 @@ export default function FollowUpsListPage() {
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((f) => (
+            pageItems.map((f) => (
               <TableRow key={f.id}>
                 <TableCell className="font-medium text-foreground">{f.customer?.name ?? f.lead?.name ?? "-"}</TableCell>
                 <TableCell className="text-muted-foreground">{f.salesperson?.user?.name ?? "-"}</TableCell>
@@ -127,6 +140,9 @@ export default function FollowUpsListPage() {
           )}
         </TableBody>
       </Table>
+      {!loading && filtered.length > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+      )}
     </div>
   );
 }
