@@ -8,8 +8,12 @@ import { formatTime, todayIso } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { IconPause, IconPlay } from "@/components/icons";
 import { endIcon, replayIcon, startIcon, stopIcon } from "@/components/tracking/mapIcons";
+import { cn } from "@/lib/utils";
 import type { RouteHistoryResponse } from "@/types";
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -84,22 +88,12 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-slate-600">Date</label>
-          <input
-            type="date"
-            value={date}
-            max={todayIso()}
-            onChange={(e) => setDate(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-          />
+          <label className="text-sm font-medium text-foreground">Date</label>
+          <Input type="date" value={date} max={todayIso()} onChange={(e) => setDate(e.target.value)} className="w-auto" />
         </div>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            isToday ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
-          }`}
-        >
+        <Badge variant={isToday ? "success" : "muted"}>
           {isToday ? "Viewing Live Day (Today)" : `Viewing route history for ${date}`}
-        </span>
+        </Badge>
       </div>
 
       {loading ? (
@@ -115,14 +109,14 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
             <SummaryStat label="End" value={data.end ? formatTime(data.end.recordedAt) : "-"} />
           </div>
 
-          <div className="h-[420px] w-full overflow-hidden rounded-xl border border-slate-200">
+          <div className="h-[420px] w-full overflow-hidden rounded-2xl border border-border/60">
             <MapContainer center={positions[0]} zoom={13} style={{ height: "100%", width: "100%" }}>
               <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
               <FitBounds positions={positions} />
-              <Polyline positions={positions} pathOptions={{ color: "#3d63f5", weight: 4, opacity: 0.85 }} />
+              <Polyline positions={positions} pathOptions={{ color: "#7c3aed", weight: 4, opacity: 0.85 }} />
               <Marker position={positions[0]} icon={startIcon}>
                 <Popup>Start &middot; {formatTime(points[0].recordedAt)}</Popup>
               </Marker>
@@ -147,16 +141,17 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
             </MapContainer>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-card">
-            <button
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card">
+            <Button
+              size="icon"
+              className="rounded-full"
               onClick={() => {
                 if (cursor >= points.length - 1) setCursor(0);
                 setPlaying((p) => !p);
               }}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700"
             >
-              {playing ? <IconPause className="h-4 w-4" /> : <IconPlay className="h-4 w-4 translate-x-[1px]" />}
-            </button>
+              {playing ? <IconPause className="size-4" /> : <IconPlay className="size-4 translate-x-[1px]" />}
+            </Button>
             <input
               type="range"
               min={0}
@@ -166,19 +161,20 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
                 setPlaying(false);
                 setCursor(Number(e.target.value));
               }}
-              className="flex-1 accent-brand-600"
+              className="flex-1 accent-primary"
             />
-            <span className="w-20 shrink-0 text-right text-xs text-slate-500">
+            <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
               {points[cursor] ? formatTime(points[cursor].recordedAt) : "-"}
             </span>
-            <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
               {[1, 4, 10].map((s) => (
                 <button
                   key={s}
                   onClick={() => setSpeed(s)}
-                  className={`rounded-md px-2 py-1 text-xs font-medium transition ${
-                    speed === s ? "bg-white shadow-sm text-brand-600" : "text-slate-500"
-                  }`}
+                  className={cn(
+                    "rounded-md px-2 py-1 text-xs font-medium transition",
+                    speed === s ? "bg-card text-primary shadow-sm" : "text-muted-foreground"
+                  )}
                 >
                   {s}x
                 </button>
@@ -187,14 +183,14 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
           </div>
 
           {data.stops.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white shadow-card">
-              <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Visit Stops</div>
-              <div className="divide-y divide-slate-50">
+            <div className="rounded-2xl border border-border/60 bg-card shadow-card">
+              <div className="border-b border-border/60 px-4 py-3 text-sm font-semibold text-foreground">Visit Stops</div>
+              <div className="divide-y divide-border/40">
                 {data.stops.map((s) => (
                   <div key={s.id} className="flex items-center justify-between px-4 py-3">
                     <div>
-                      <p className="text-sm font-medium text-slate-700">{s.customer?.name ?? "Customer"}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-sm font-medium text-foreground">{s.customer?.name ?? "Customer"}</p>
+                      <p className="text-xs text-muted-foreground">
                         {s.checkInAt ? formatTime(s.checkInAt) : "-"} &rarr; {s.checkOutAt ? formatTime(s.checkOutAt) : "-"}
                       </p>
                     </div>
@@ -212,9 +208,9 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="text-sm font-semibold text-slate-700">{value}</p>
+    <div className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2.5">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }

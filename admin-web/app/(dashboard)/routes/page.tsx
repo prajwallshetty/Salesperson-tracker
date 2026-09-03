@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { api, apiErrorMessage } from "@/lib/api";
-import { SelectField } from "@/components/FormField";
+import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/Skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Salesperson } from "@/types";
 
 const RouteHistoryPanel = dynamic(() => import("@/components/tracking/RouteHistoryPanel"), {
@@ -38,29 +39,35 @@ export default function RouteHistoryPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Route History</h1>
-          <p className="text-sm text-slate-400">Replay a salesperson&apos;s travelled path for any day.</p>
-        </div>
-        <SelectField
-          value={selectedId}
-          onChange={(e) => {
-            setSelectedId(e.target.value);
-            router.replace(`/routes?salespersonId=${e.target.value}`);
-          }}
-          className="w-64"
-        >
-          {salespersons.map((sp) => (
-            <option key={sp.id} value={sp.id}>
-              {sp.user.name} &middot; {sp.employeeCode}
-            </option>
-          ))}
-        </SelectField>
-      </div>
+      <PageHeader
+        title="Route History"
+        description="Replay a salesperson's travelled path for any day."
+        actions={
+          salespersons.length > 0 ? (
+            <Select
+              value={selectedId}
+              onValueChange={(v) => {
+                setSelectedId(v);
+                router.replace(`/routes?salespersonId=${v}`);
+              }}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select salesperson" />
+              </SelectTrigger>
+              <SelectContent>
+                {salespersons.map((sp) => (
+                  <SelectItem key={sp.id} value={sp.id}>
+                    {sp.user.name} &middot; {sp.employeeCode}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : undefined
+        }
+      />
 
       {loading ? (
-        <div className="h-96 animate-pulse rounded-xl bg-slate-100" />
+        <Skeleton className="h-96 w-full" />
       ) : !selected ? (
         <EmptyState title="No salespersons available" />
       ) : (
