@@ -2,26 +2,45 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { ArrowRightLeft, Plus, Target } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { SkeletonList } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { GeoError, friendlyGeoErrorMessage, getCurrentPosition } from "@/lib/geolocation";
-import { PlusIcon, TargetIcon, XIcon } from "@/components/icons";
 import type { Lead, LeadStatus } from "@/types";
-import { format } from "date-fns";
 
 const STATUS_OPTIONS: LeadStatus[] = ["NEW", "CONTACTED", "QUALIFIED", "NEGOTIATION", "CONVERTED", "LOST"];
 
-const STATUS_COLORS: Record<LeadStatus, string> = {
-  NEW: "bg-slate-100 text-slate-600",
-  CONTACTED: "bg-blue-100 text-blue-700",
-  QUALIFIED: "bg-indigo-100 text-indigo-700",
-  NEGOTIATION: "bg-amber-100 text-amber-700",
-  CONVERTED: "bg-emerald-100 text-emerald-700",
-  LOST: "bg-red-100 text-red-700",
+const STATUS_VARIANT: Record<LeadStatus, "muted" | "info" | "default" | "warning" | "success" | "danger"> = {
+  NEW: "muted",
+  CONTACTED: "info",
+  QUALIFIED: "default",
+  NEGOTIATION: "warning",
+  CONVERTED: "success",
+  LOST: "danger",
 };
 
 export default function LeadsPage() {
@@ -57,7 +76,7 @@ export default function LeadsPage() {
     try {
       const point = await getCurrentPosition().catch((err) => {
         if (err instanceof GeoError) {
-          toast(friendlyGeoErrorMessage(err.kind) + " Converting without precise coordinates.", { icon: "ℹ️" });
+          toast(friendlyGeoErrorMessage(err.kind) + " Converting without precise coordinates.");
         }
         return null;
       });
@@ -77,12 +96,9 @@ export default function LeadsPage() {
       <PageHeader
         title="Leads & Follow-ups"
         right={
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white active:bg-brand-700"
-          >
-            <PlusIcon className="h-5 w-5" />
-          </button>
+          <Button size="icon" className="h-9 w-9 rounded-full" onClick={() => setShowCreate(true)} aria-label="Add lead">
+            <Plus className="h-5 w-5" />
+          </Button>
         }
       />
       <div className="px-4 pt-4">
@@ -101,51 +117,51 @@ export default function LeadsPage() {
           <SkeletonList count={4} />
         ) : leads.length === 0 ? (
           <EmptyState
-            icon={<TargetIcon className="h-10 w-10 text-slate-300" />}
+            icon={<Target />}
             title="No leads yet"
             message="Add a new lead to start tracking your pipeline."
-            action={
-              <button onClick={() => setShowCreate(true)} className="mt-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white">
-                Add Lead
-              </button>
-            }
+            action={<Button onClick={() => setShowCreate(true)}>Add Lead</Button>}
           />
         ) : (
           <ul className="space-y-3">
             {leads.map((lead) => (
-              <li key={lead.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <li key={lead.id} className="rounded-2xl border border-border/60 bg-card p-4 shadow-card">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-bold text-slate-900">{lead.name}</p>
-                    <p className="text-xs text-slate-500">{lead.company || lead.phone || lead.email || "—"}</p>
+                    <p className="font-bold text-foreground">{lead.name}</p>
+                    <p className="text-xs text-muted-foreground">{lead.company || lead.phone || lead.email || "—"}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${STATUS_COLORS[lead.status]}`}>
+                  <Badge variant={STATUS_VARIANT[lead.status]} className="shrink-0">
                     {lead.status.replace(/_/g, " ")}
-                  </span>
+                  </Badge>
                 </div>
-                {lead.notes && <p className="mt-2 text-xs text-slate-400">{lead.notes}</p>}
-                <p className="mt-2 text-[11px] text-slate-400">Added {format(new Date(lead.createdAt), "d MMM yyyy")}</p>
+                {lead.notes && <p className="mt-2 text-xs text-muted-foreground">{lead.notes}</p>}
+                <p className="mt-2 text-[11px] text-muted-foreground">Added {format(new Date(lead.createdAt), "d MMM yyyy")}</p>
 
                 {lead.status !== "CONVERTED" && lead.status !== "LOST" && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <select
-                      value={lead.status}
-                      onChange={(e) => updateStatus(lead, e.target.value as LeadStatus)}
-                      className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-600"
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s} disabled={s === "CONVERTED"}>
-                          {s.replace(/_/g, " ")}
-                        </option>
-                      ))}
-                    </select>
-                    <button
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Select value={lead.status} onValueChange={(v) => updateStatus(lead, v as LeadStatus)}>
+                      <SelectTrigger className="h-9 w-auto flex-1 text-xs font-semibold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((s) => (
+                          <SelectItem key={s} value={s} disabled={s === "CONVERTED"}>
+                            {s.replace(/_/g, " ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="success"
+                      size="sm"
+                      className="h-9"
                       onClick={() => convertLead(lead)}
-                      disabled={convertingId === lead.id}
-                      className="ml-auto rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                      loading={convertingId === lead.id}
                     >
-                      {convertingId === lead.id ? "Converting…" : "Convert to Customer"}
-                    </button>
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                      {convertingId === lead.id ? "Converting…" : "Convert"}
+                    </Button>
                   </div>
                 )}
               </li>
@@ -154,12 +170,27 @@ export default function LeadsPage() {
         )}
       </div>
 
-      {showCreate && <CreateLeadModal onClose={() => setShowCreate(false)} onCreated={(l) => { setLeads((p) => [l, ...p]); setShowCreate(false); }} />}
+      <CreateLeadDrawer
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={(l) => {
+          setLeads((p) => [l, ...p]);
+          setShowCreate(false);
+        }}
+      />
     </div>
   );
 }
 
-function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: (l: Lead) => void }) {
+function CreateLeadDrawer({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (l: Lead) => void;
+}) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -186,6 +217,12 @@ function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreate
       });
       toast.success("Lead created");
       onCreated(res.data);
+      setName("");
+      setPhone("");
+      setEmail("");
+      setCompany("");
+      setSource("");
+      setNotes("");
     } catch (err) {
       toast.error(apiErrorMessage(err, "Could not create lead"));
     } finally {
@@ -194,63 +231,45 @@ function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
-      <form
-        onSubmit={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-t-3xl bg-white p-6 sm:rounded-3xl"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900">New Lead</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-slate-400 active:bg-slate-100">
-            <XIcon className="h-5 w-5" />
-          </button>
-        </div>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Name *"
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm outline-none focus:border-brand-500"
-        />
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone"
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm outline-none focus:border-brand-500"
-        />
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm outline-none focus:border-brand-500"
-        />
-        <input
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          placeholder="Company"
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm outline-none focus:border-brand-500"
-        />
-        <input
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-          placeholder="Source (e.g. referral, cold call)"
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm outline-none focus:border-brand-500"
-        />
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes"
-          rows={2}
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm outline-none focus:border-brand-500"
-        />
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-xl bg-brand-600 py-3.5 text-sm font-extrabold text-white disabled:opacity-60"
-        >
-          {submitting ? "Creating…" : "Create Lead"}
-        </button>
-      </form>
-    </div>
+    <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
+      <DrawerContent>
+        <form onSubmit={handleSubmit} className="flex max-h-[88vh] flex-col">
+          <DrawerHeader>
+            <DrawerTitle>New Lead</DrawerTitle>
+          </DrawerHeader>
+          <div className="space-y-3 overflow-y-auto px-5 pb-2">
+            <div className="space-y-1.5">
+              <Label>Name *</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Company</Label>
+              <Input value={company} onChange={(e) => setCompany(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Source</Label>
+              <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Referral, cold call…" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+            </div>
+          </div>
+          <DrawerFooter>
+            <Button type="submit" size="lg" className="h-14 w-full text-base" loading={submitting}>
+              {submitting ? "Creating…" : "Create Lead"}
+            </Button>
+          </DrawerFooter>
+        </form>
+      </DrawerContent>
+    </Drawer>
   );
 }

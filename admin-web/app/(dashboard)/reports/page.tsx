@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
-import clsx from "clsx";
+import { toast } from "sonner";
 import { api, apiErrorMessage } from "@/lib/api";
+import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/format";
 import { IconChart, IconOrders, IconWallet } from "@/components/icons";
 import type { Collection, Order, PerformanceLeaderboardRow } from "@/types";
@@ -24,25 +27,17 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Reports</h1>
-        <p className="text-sm text-slate-400">Composed views over sales, performance, and collections data.</p>
-      </div>
+      <PageHeader title="Reports" description="Composed views over sales, performance, and collections data." />
 
-      <div className="flex items-center gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={clsx(
-              "flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition",
-              tab === t.key ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-            )}
-          >
-            <t.icon className="h-4 w-4" /> {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as ReportTab)}>
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger key={t.key} value={t.key} className="gap-1.5">
+              <t.icon className="size-4" /> {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {tab === "sales" && <SalesReport />}
       {tab === "performance" && <PerformanceReport />}
@@ -61,29 +56,26 @@ function RangeToggle({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
-      {ranges.map((r) => (
-        <button
-          key={r.key}
-          onClick={() => onChange(r.key)}
-          className={clsx(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition",
-            value === r.key ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-          )}
-        >
-          {r.label}
-        </button>
-      ))}
-    </div>
+    <Tabs value={value} onValueChange={onChange}>
+      <TabsList>
+        {ranges.map((r) => (
+          <TabsTrigger key={r.key} value={r.key}>
+            {r.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-slate-800">{value}</p>
-    </div>
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -108,7 +100,7 @@ function SalesReport() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Orders {range === "today" ? "placed today" : "placed this month"}, from live order data.
         </p>
         <RangeToggle
@@ -127,49 +119,45 @@ function SalesReport() {
         <StatCard label="Avg Order Value" value={formatCurrency(avgOrderValue)} />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Order #</th>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Salesperson</th>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium text-right">Total</th>
-                <th className="px-4 py-3 font-medium text-right">Collected</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
-              ) : orders.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-10">
-                    <EmptyState icon={<IconOrders className="h-6 w-6" />} title="No orders in this period" />
-                  </td>
-                </tr>
-              ) : (
-                orders.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-700">{o.number}</td>
-                    <td className="px-4 py-3 text-slate-500">{o.customer?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{o.salesperson?.user?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{formatDateTime(o.createdAt)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatCurrency(o.grandTotal)}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{formatCurrency(o.amountCollected)}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={o.status} />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <p className="text-right text-xs text-slate-400">Total collected in period: {formatCurrency(totalCollected)}</p>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Order #</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead>Salesperson</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+            <TableHead className="text-right">Collected</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
+          ) : orders.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={7} className="py-10">
+                <EmptyState icon={<IconOrders className="size-5" />} title="No orders in this period" />
+              </TableCell>
+            </TableRow>
+          ) : (
+            orders.map((o) => (
+              <TableRow key={o.id}>
+                <TableCell className="font-medium text-foreground">{o.number}</TableCell>
+                <TableCell className="text-muted-foreground">{o.customer?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{o.salesperson?.user?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{formatDateTime(o.createdAt)}</TableCell>
+                <TableCell className="text-right font-semibold text-foreground">{formatCurrency(o.grandTotal)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatCurrency(o.amountCollected)}</TableCell>
+                <TableCell>
+                  <StatusBadge status={o.status} />
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+      <p className="text-right text-xs text-muted-foreground">Total collected in period: {formatCurrency(totalCollected)}</p>
     </div>
   );
 }
@@ -195,7 +183,7 @@ function PerformanceReport() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">Team performance ranked by sales, from the live leaderboard.</p>
+        <p className="text-sm text-muted-foreground">Team performance ranked by sales, from the live leaderboard.</p>
         <RangeToggle
           ranges={[
             { key: "today", label: "Today" },
@@ -213,44 +201,40 @@ function PerformanceReport() {
         <StatCard label="Team Visits" value={formatNumber(totalVisits)} />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Rank</th>
-                <th className="px-4 py-3 font-medium">Salesperson</th>
-                <th className="px-4 py-3 font-medium text-right">Sales</th>
-                <th className="px-4 py-3 font-medium text-right">Orders</th>
-                <th className="px-4 py-3 font-medium text-right">Visits</th>
-                <th className="px-4 py-3 font-medium text-right">Collections</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10">
-                    <EmptyState icon={<IconChart className="h-6 w-6" />} title="No performance data for this period" />
-                  </td>
-                </tr>
-              ) : (
-                items.map((row) => (
-                  <tr key={row.salespersonId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-500">{row.rank}</td>
-                    <td className="px-4 py-3 font-medium text-slate-700">{row.name}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatCurrency(row.sales)}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{formatNumber(row.orders)}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{formatNumber(row.visits)}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{formatCurrency(row.collections)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Rank</TableHead>
+            <TableHead>Salesperson</TableHead>
+            <TableHead className="text-right">Sales</TableHead>
+            <TableHead className="text-right">Orders</TableHead>
+            <TableHead className="text-right">Visits</TableHead>
+            <TableHead className="text-right">Collections</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
+          ) : items.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="py-10">
+                <EmptyState icon={<IconChart className="size-5" />} title="No performance data for this period" />
+              </TableCell>
+            </TableRow>
+          ) : (
+            items.map((row) => (
+              <TableRow key={row.salespersonId}>
+                <TableCell className="text-muted-foreground">{row.rank}</TableCell>
+                <TableCell className="font-medium text-foreground">{row.name}</TableCell>
+                <TableCell className="text-right font-semibold text-foreground">{formatCurrency(row.sales)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatNumber(row.orders)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatNumber(row.visits)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatCurrency(row.collections)}</TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -278,7 +262,7 @@ function CollectionsReport() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">Payments collected in the period, broken down by method.</p>
+        <p className="text-sm text-muted-foreground">Payments collected in the period, broken down by method.</p>
         <RangeToggle
           ranges={[
             { key: "today", label: "Today" },
@@ -294,48 +278,42 @@ function CollectionsReport() {
         <StatCard label="Transactions" value={formatNumber(items.length)} />
         <StatCard
           label="Top Method"
-          value={
-            Object.entries(byMethod).sort((a, b) => b[1] - a[1])[0]?.[0]?.replace(/_/g, " ") ?? "-"
-          }
+          value={Object.entries(byMethod).sort((a, b) => b[1] - a[1])[0]?.[0]?.replace(/_/g, " ") ?? "-"}
         />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Salesperson</th>
-                <th className="px-4 py-3 font-medium">Method</th>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10">
-                    <EmptyState icon={<IconWallet className="h-6 w-6" />} title="No collections in this period" />
-                  </td>
-                </tr>
-              ) : (
-                items.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-700">{c.customer?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{c.salesperson?.user?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{c.method.replace(/_/g, " ")}</td>
-                    <td className="px-4 py-3 text-slate-500">{formatDateTime(c.collectedAt)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatCurrency(c.amount)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Customer</TableHead>
+            <TableHead>Salesperson</TableHead>
+            <TableHead>Method</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+          ) : items.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={5} className="py-10">
+                <EmptyState icon={<IconWallet className="size-5" />} title="No collections in this period" />
+              </TableCell>
+            </TableRow>
+          ) : (
+            items.map((c) => (
+              <TableRow key={c.id}>
+                <TableCell className="font-medium text-foreground">{c.customer?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{c.salesperson?.user?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{c.method.replace(/_/g, " ")}</TableCell>
+                <TableCell className="text-muted-foreground">{formatDateTime(c.collectedAt)}</TableCell>
+                <TableCell className="text-right font-semibold text-foreground">{formatCurrency(c.amount)}</TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

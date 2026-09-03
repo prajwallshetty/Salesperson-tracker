@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
+import { format, isPast } from "date-fns";
+import { AlertTriangle, Check, Target } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { SkeletonList } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
-import { AlertTriangleIcon, CheckIcon, TargetIcon } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { FollowUp } from "@/types";
-import { format, isPast } from "date-fns";
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
 
 type Tab = "PENDING" | "OVERDUE" | "COMPLETED";
 
@@ -50,7 +52,7 @@ export default function FollowUpsPage() {
     <div>
       <PageHeader title="Leads & Follow-ups" />
       <div className="px-4 pt-4">
-        <div className="mb-4">
+        <div className="mb-3">
           <SegmentedControl
             value="followups"
             onChange={(v) => v === "leads" && router.push("/leads")}
@@ -76,11 +78,7 @@ export default function FollowUpsPage() {
         {loading ? (
           <SkeletonList count={4} />
         ) : items.length === 0 ? (
-          <EmptyState
-            icon={<TargetIcon className="h-10 w-10 text-slate-300" />}
-            title={`No ${tab.toLowerCase()} follow-ups`}
-            message="You're all caught up here."
-          />
+          <EmptyState icon={<Target />} title={`No ${tab.toLowerCase()} follow-ups`} message="You're all caught up here." />
         ) : (
           <ul className="space-y-3">
             {items.map((f) => {
@@ -88,36 +86,38 @@ export default function FollowUpsPage() {
               return (
                 <li
                   key={f.id}
-                  className={clsx(
-                    "rounded-2xl border bg-white p-4",
-                    overdue ? "border-red-300 bg-red-50/40" : "border-slate-200"
+                  className={cn(
+                    "rounded-2xl border p-4 shadow-card",
+                    overdue ? "border-danger/40 bg-danger-soft" : "border-border/60 bg-card"
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-bold text-slate-900">{f.customer?.name || f.lead?.name || "Follow-up"}</p>
-                      <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-slate-500">
-                        {overdue && <AlertTriangleIcon className="h-3.5 w-3.5 text-red-500" />}
-                        <span className={overdue ? "text-red-600" : ""}>
+                      <p className="font-bold text-foreground">{f.customer?.name || f.lead?.name || "Follow-up"}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold">
+                        {overdue && <AlertTriangle className="h-3.5 w-3.5 text-danger" />}
+                        <span className={overdue ? "text-danger" : "text-muted-foreground"}>
                           Due {format(new Date(f.dueDate), "d MMM yyyy")}
                         </span>
                       </p>
                     </div>
                     {f.status === "COMPLETED" && (
-                      <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                        <CheckIcon className="h-3 w-3" /> Done
-                      </span>
+                      <Badge variant="success" className="shrink-0">
+                        <Check className="h-3 w-3" /> Done
+                      </Badge>
                     )}
                   </div>
-                  {f.notes && <p className="mt-2 text-xs text-slate-500">{f.notes}</p>}
+                  {f.notes && <p className="mt-2 text-xs text-muted-foreground">{f.notes}</p>}
                   {f.status !== "COMPLETED" && (
-                    <button
+                    <Button
                       onClick={() => markComplete(f.id)}
-                      disabled={completingId === f.id}
-                      className="mt-3 w-full rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+                      loading={completingId === f.id}
+                      size="lg"
+                      variant={overdue ? "destructive" : "secondary"}
+                      className={cn("mt-3 h-11 w-full text-sm", !overdue && "bg-foreground text-background hover:bg-foreground/90")}
                     >
                       {completingId === f.id ? "Updating…" : "Mark Complete"}
-                    </button>
+                    </Button>
                   )}
                 </li>
               );

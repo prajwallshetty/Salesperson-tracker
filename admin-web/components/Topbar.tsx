@@ -1,82 +1,129 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { Menu, Search, LogOut, ChevronDown, Settings as SettingsIcon } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { Avatar } from "@/components/Avatar";
 import { NotificationBell } from "@/components/NotificationBell";
-import { IconMenu, IconLogout, IconChevronDown, IconSearch } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const TITLES: Record<string, string> = {
+  "/salespersons": "Salespersons",
+  "/customers": "Customers",
+  "/tracking": "Live Tracking",
+  "/routes": "Route History",
+  "/leads": "Leads",
+  "/visits": "Visits",
+  "/follow-ups": "Follow-ups",
+  "/quotations": "Quotations",
+  "/orders": "Orders",
+  "/collections": "Collections",
+  "/products": "Products",
+  "/performance": "Performance",
+  "/reports": "Reports",
+  "/notifications": "Notifications",
+  "/settings": "Settings",
+};
+
+function pageTitle(pathname: string): string {
+  if (TITLES[pathname]) return TITLES[pathname];
+  const base = "/" + pathname.split("/")[1];
+  return TITLES[base] ?? "Overview";
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
 
 interface TopbarProps {
   onMenuClick: () => void;
-  title?: string;
+  onSearchClick?: () => void;
 }
 
-export function Topbar({ onMenuClick, title }: TopbarProps) {
+export function Topbar({ onMenuClick, onSearchClick }: TopbarProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim()) router.push(`/salespersons?search=${encodeURIComponent(query.trim())}`);
-  };
+  const pathname = usePathname();
+  const isDashboard = pathname === "/dashboard";
+  const firstName = user?.name?.split(" ")[0] ?? "Admin";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border/60 bg-card/85 px-4 backdrop-blur-md sm:px-6">
       <button
         onClick={onMenuClick}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden"
+        className="flex size-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted lg:hidden"
         aria-label="Open menu"
       >
-        <IconMenu className="h-5 w-5" />
+        <Menu className="size-5" />
       </button>
-      {title ? (
-        <h1 className="text-base font-semibold text-slate-800 lg:text-lg">{title}</h1>
-      ) : (
-        <form onSubmit={handleSearch} className="hidden max-w-sm flex-1 sm:block">
-          <div className="relative">
-            <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search salespersons..."
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100"
-            />
-          </div>
-        </form>
-      )}
-      <div className="ml-auto flex items-center gap-2">
+
+      <div className="min-w-0">
+        {isDashboard ? (
+          <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
+            {greeting()}, {firstName} <span aria-hidden>👋</span>
+          </h1>
+        ) : (
+          <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">{pageTitle(pathname)}</h1>
+        )}
+      </div>
+
+      <button
+        onClick={onSearchClick}
+        className="ml-2 hidden max-w-xs flex-1 items-center gap-2 rounded-xl border border-border/60 bg-muted/50 px-3 py-2 text-sm text-muted-foreground transition hover:border-border hover:bg-muted sm:flex"
+      >
+        <Search className="size-4" />
+        <span className="flex-1 text-left">Search anything...</span>
+        <kbd className="rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+          ⌘K
+        </kbd>
+      </button>
+
+      <div className="ml-auto flex items-center gap-1.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="sm:hidden"
+          onClick={onSearchClick}
+          aria-label="Search"
+        >
+          <Search className="size-[18px]" />
+        </Button>
         <NotificationBell />
-        <div className="relative" ref={ref}>
-          <button
-            onClick={() => setMenuOpen((o) => !o)}
-            className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition hover:bg-slate-100"
-          >
-            <Avatar name={user?.name ?? "Admin"} src={user?.avatarUrl} size="sm" />
-            <span className="hidden text-sm font-medium text-slate-700 sm:block">{user?.name}</span>
-            <IconChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-12 z-50 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-card-hover">
-              <div className="px-2.5 py-2">
-                <p className="truncate text-sm font-medium text-slate-700">{user?.name}</p>
-                <p className="truncate text-xs text-slate-400">{user?.email}</p>
-              </div>
-              <div className="my-1 h-px bg-slate-100" />
-              <button
-                onClick={() => logout()}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
-              >
-                <IconLogout className="h-4 w-4" />
-                Log out
-              </button>
-            </div>
-          )}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition hover:bg-muted">
+              <Avatar name={user?.name ?? "Admin"} src={user?.avatarUrl} size="sm" />
+              <span className="hidden text-sm font-medium text-foreground sm:block">{user?.name}</span>
+              <ChevronDown className="hidden size-4 text-muted-foreground sm:block" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="px-2 py-1.5">
+              <p className="truncate text-sm font-semibold text-foreground">{user?.name}</p>
+              <p className="truncate text-xs font-normal normal-case text-muted-foreground">{user?.email}</p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => router.push("/settings")}>
+              <SettingsIcon /> Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem destructive onSelect={() => logout()}>
+              <LogOut /> Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

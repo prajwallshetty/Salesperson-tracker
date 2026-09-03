@@ -1,5 +1,20 @@
-import { ReactNode } from "react";
+"use client";
 
+import { ReactNode } from "react";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { Button } from "@/components/ui/button";
+
+/**
+ * Bottom-sheet confirmation prompt (built on the vaul Drawer primitive) — a full-width,
+ * thumb-reachable pair of actions beats a centered dialog for one-handed mobile use.
+ */
 export function ConfirmDialog({
   open,
   title,
@@ -19,33 +34,27 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onCancel}>
-      <div
-        className="w-full max-w-sm rounded-t-3xl bg-white p-6 shadow-xl sm:rounded-3xl animate-[fadeIn_0.15s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-        <div className="mt-2 text-sm text-slate-600">{message}</div>
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-700 active:bg-slate-100"
-          >
+    <Drawer open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{title}</DrawerTitle>
+          <DrawerDescription className="pt-1 text-[13px] leading-relaxed">{message}</DrawerDescription>
+        </DrawerHeader>
+        <DrawerFooter className="flex-row">
+          <Button variant="outline" size="lg" className="flex-1" onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={danger ? "destructive" : "primary"}
+            size="lg"
+            className="flex-1"
             onClick={onConfirm}
-            className={
-              "flex-1 rounded-xl py-3 text-sm font-semibold text-white active:opacity-90 " +
-              (danger ? "bg-red-600" : "bg-brand-600")
-            }
           >
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 }

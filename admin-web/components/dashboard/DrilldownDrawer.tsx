@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Avatar";
 import { api, apiErrorMessage } from "@/lib/api";
 import { formatCurrency, formatDateTime, relativeTime } from "@/lib/format";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import type { Collection, FollowUp, Order, Salesperson, TargetRow, TopPerformerRow, Visit } from "@/types";
 
 export type DrilldownKind =
@@ -93,7 +93,7 @@ export function DrilldownDrawer({ kind, onClose }: DrilldownDrawerProps) {
 }
 
 function Row({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 px-4 py-3 hover:bg-slate-50">{children}</div>;
+  return <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 px-4 py-3 hover:bg-muted/60">{children}</div>;
 }
 
 function SalespersonList({ items }: { items: Salesperson[] }) {
@@ -104,8 +104,8 @@ function SalespersonList({ items }: { items: Salesperson[] }) {
           <div className="flex items-center gap-3">
             <Avatar name={sp.user.name} src={sp.user.avatarUrl} online={sp.isOnline} />
             <div>
-              <p className="text-sm font-medium text-slate-700">{sp.user.name}</p>
-              <p className="text-xs text-slate-400">{sp.territory?.name ?? "Unassigned"} &middot; {sp.employeeCode}</p>
+              <p className="text-sm font-medium text-foreground">{sp.user.name}</p>
+              <p className="text-xs text-muted-foreground">{sp.territory?.name ?? "Unassigned"} &middot; {sp.employeeCode}</p>
             </div>
           </div>
           <StatusBadge status={sp.status} />
@@ -121,11 +121,11 @@ function OrderList({ items }: { items: Order[] }) {
       {items.map((o) => (
         <Row key={o.id}>
           <div>
-            <p className="text-sm font-medium text-slate-700">{o.number} &middot; {o.customer?.name ?? "-"}</p>
-            <p className="text-xs text-slate-400">{o.salesperson?.user?.name ?? "-"} &middot; {formatDateTime(o.createdAt)}</p>
+            <p className="text-sm font-medium text-foreground">{o.number} &middot; {o.customer?.name ?? "-"}</p>
+            <p className="text-xs text-muted-foreground">{o.salesperson?.user?.name ?? "-"} &middot; {formatDateTime(o.createdAt)}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-semibold text-slate-800">{formatCurrency(o.grandTotal)}</p>
+            <p className="text-sm font-semibold text-foreground">{formatCurrency(o.grandTotal)}</p>
             <StatusBadge status={o.status} />
           </div>
         </Row>
@@ -140,8 +140,8 @@ function VisitList({ items }: { items: Visit[] }) {
       {items.map((v) => (
         <Row key={v.id}>
           <div>
-            <p className="text-sm font-medium text-slate-700">{v.customer?.name ?? "-"}</p>
-            <p className="text-xs text-slate-400">{v.salesperson?.user?.name ?? "-"} &middot; {v.checkInAt ? relativeTime(v.checkInAt) : "Not checked in"}</p>
+            <p className="text-sm font-medium text-foreground">{v.customer?.name ?? "-"}</p>
+            <p className="text-xs text-muted-foreground">{v.salesperson?.user?.name ?? "-"} &middot; {v.checkInAt ? relativeTime(v.checkInAt) : "Not checked in"}</p>
           </div>
           <StatusBadge status={v.status} />
         </Row>
@@ -156,8 +156,8 @@ function FollowupList({ items }: { items: FollowUp[] }) {
       {items.map((f) => (
         <Row key={f.id}>
           <div>
-            <p className="text-sm font-medium text-slate-700">{f.customer?.name ?? f.lead?.name ?? "-"}</p>
-            <p className="text-xs text-slate-400">{f.salesperson?.user?.name ?? "-"} &middot; due {formatDateTime(f.dueDate)}</p>
+            <p className="text-sm font-medium text-foreground">{f.customer?.name ?? f.lead?.name ?? "-"}</p>
+            <p className="text-xs text-muted-foreground">{f.salesperson?.user?.name ?? "-"} &middot; due {formatDateTime(f.dueDate)}</p>
           </div>
           <StatusBadge status={f.status} />
         </Row>
@@ -172,10 +172,10 @@ function CollectionList({ items }: { items: Collection[] }) {
       {items.map((c) => (
         <Row key={c.id}>
           <div>
-            <p className="text-sm font-medium text-slate-700">{c.customer?.name ?? "-"}</p>
-            <p className="text-xs text-slate-400">{c.salesperson?.user?.name ?? "-"} &middot; {c.method} &middot; {relativeTime(c.collectedAt)}</p>
+            <p className="text-sm font-medium text-foreground">{c.customer?.name ?? "-"}</p>
+            <p className="text-xs text-muted-foreground">{c.salesperson?.user?.name ?? "-"} &middot; {c.method} &middot; {relativeTime(c.collectedAt)}</p>
           </div>
-          <p className="text-sm font-semibold text-slate-800">{formatCurrency(c.amount)}</p>
+          <p className="text-sm font-semibold text-foreground">{formatCurrency(c.amount)}</p>
         </Row>
       ))}
     </div>
@@ -186,21 +186,21 @@ function TargetList({ items }: { items: TargetRow[] }) {
   return (
     <div className="space-y-2">
       {items.map((t) => (
-        <div key={t.salespersonId} className="rounded-lg border border-slate-100 px-4 py-3">
+        <div key={t.salespersonId} className="rounded-lg border border-border/60 px-4 py-3">
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <Avatar name={t.name} src={t.avatarUrl} size="sm" />
-              <p className="text-sm font-medium text-slate-700">{t.name}</p>
+              <p className="text-sm font-medium text-foreground">{t.name}</p>
             </div>
-            <p className="text-xs font-semibold text-slate-500">{t.percent}%</p>
+            <p className="text-xs font-semibold text-muted-foreground">{t.percent}%</p>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-brand-500 transition-all"
+              className="h-full rounded-full bg-primary transition-all"
               style={{ width: `${Math.min(100, t.percent)}%` }}
             />
           </div>
-          <p className="mt-1.5 text-xs text-slate-400">
+          <p className="mt-1.5 text-xs text-muted-foreground">
             {formatCurrency(t.achieved)} of {formatCurrency(t.targetAmount)}
           </p>
         </div>
@@ -215,15 +215,15 @@ function TopPerformerList({ items }: { items: TopPerformerRow[] }) {
       {items.map((t, i) => (
         <Row key={t.salespersonId}>
           <div className="flex items-center gap-3">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-500">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
               {i + 1}
             </span>
             <Avatar name={t.name} src={t.avatarUrl} size="sm" />
-            <p className="text-sm font-medium text-slate-700">{t.name}</p>
+            <p className="text-sm font-medium text-foreground">{t.name}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-semibold text-slate-800">{formatCurrency(t.sales)}</p>
-            <p className="text-xs text-slate-400">{t.orders} orders</p>
+            <p className="text-sm font-semibold text-foreground">{formatCurrency(t.sales)}</p>
+            <p className="text-xs text-muted-foreground">{t.orders} orders</p>
           </div>
         </Row>
       ))}

@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
-import { Modal } from "@/components/Modal";
+import { toast } from "sonner";
+import { Users } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { SearchInput } from "@/components/SearchInput";
 import { EmptyState } from "@/components/EmptyState";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/Skeleton";
 import { api, apiErrorMessage } from "@/lib/api";
 import type { Customer } from "@/types";
 
@@ -69,49 +73,50 @@ export function AssignCustomersModal({ open, salespersonId, onClose, onAssigned 
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Assign Customers" width="max-w-lg">
-      <SearchInput value={search} onChange={setSearch} placeholder="Search customers..." className="mb-3" />
-      <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-100">
-        {loading ? (
-          <div className="p-4 text-sm text-slate-400">Loading customers...</div>
-        ) : filtered.length === 0 ? (
-          <EmptyState title="No customers found" />
-        ) : (
-          filtered.map((c) => (
-            <label
-              key={c.id}
-              className="flex cursor-pointer items-center gap-3 border-b border-slate-50 px-3 py-2.5 last:border-b-0 hover:bg-slate-50"
-            >
-              <input
-                type="checkbox"
-                checked={selected.has(c.id)}
-                onChange={() => toggle(c.id)}
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-400"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-slate-700">{c.name}</p>
-                <p className="truncate text-xs text-slate-400">{c.address ?? c.phone ?? "-"}</p>
-              </div>
-            </label>
-          ))
-        )}
-      </div>
-      <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs text-slate-400">{selected.size} selected</span>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={busy}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-          >
-            {busy ? "Assigning..." : "Assign Selected"}
-          </button>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Assign Customers</DialogTitle>
+        </DialogHeader>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search customers..." />
+        <div className="max-h-80 overflow-y-auto rounded-xl border border-border/60">
+          {loading ? (
+            <div className="space-y-2 p-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="p-4">
+              <EmptyState icon={<Users className="size-5" />} title="No customers found" />
+            </div>
+          ) : (
+            filtered.map((c) => (
+              <label
+                key={c.id}
+                className="flex cursor-pointer items-center gap-3 border-b border-border/40 px-3 py-2.5 last:border-b-0 hover:bg-muted/50"
+              >
+                <Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggle(c.id)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{c.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{c.address ?? c.phone ?? "-"}</p>
+                </div>
+              </label>
+            ))
+          )}
         </div>
-      </div>
-    </Modal>
+        <DialogFooter className="items-center justify-between sm:justify-between">
+          <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={onSubmit} loading={busy}>
+              Assign Selected
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,3 +1,6 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
 interface PaginationProps {
   page: number;
   pageSize: number;
@@ -11,30 +14,22 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
   const to = Math.min(total, page * pageSize);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-4 py-3.5 text-sm text-muted-foreground">
       <span>
-        Showing <span className="font-medium text-slate-700">{from}</span>-
-        <span className="font-medium text-slate-700">{to}</span> of{" "}
-        <span className="font-medium text-slate-700">{total}</span>
+        Showing <span className="font-semibold text-foreground">{from}</span>-
+        <span className="font-semibold text-foreground">{to}</span> of{" "}
+        <span className="font-semibold text-foreground">{total}</span>
       </span>
-      <div className="flex items-center gap-1">
-        <button
-          onClick={() => onPageChange(page - 1)}
-          disabled={page <= 1}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Prev
-        </button>
-        <span className="px-2 text-slate-500">
+      <div className="flex items-center gap-1.5">
+        <Button variant="outline" size="sm" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+          <ChevronLeft /> Prev
+        </Button>
+        <span className="px-2 text-xs font-medium">
           Page {page} of {totalPages}
         </span>
-        <button
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= totalPages}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Next
-        </button>
+        <Button variant="outline" size="sm" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+          Next <ChevronRight />
+        </Button>
       </div>
     </div>
   );

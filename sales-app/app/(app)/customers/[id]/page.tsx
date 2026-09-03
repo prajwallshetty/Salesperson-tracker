@@ -1,16 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
+import { Navigation, Phone, FileText, ReceiptText } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/Skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import { mapsLink } from "@/lib/geolocation";
-import { NavigationIcon, PhoneIcon } from "@/components/icons";
 import type { Customer } from "@/types";
 import { format } from "date-fns";
+
+const VISIT_STATUS_VARIANT: Record<string, "success" | "warning" | "muted" | "danger"> = {
+  COMPLETED: "success",
+  IN_PROGRESS: "warning",
+  PLANNED: "muted",
+  MISSED: "danger",
+  CANCELLED: "muted",
+};
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,8 +56,8 @@ export default function CustomerDetailPage() {
 
   if (loading) {
     return (
-      <div className="px-4 pt-4 space-y-3">
-        <Skeleton className="h-24 w-full" />
+      <div className="space-y-3 px-4 pt-4">
+        <Skeleton className="h-32 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
     );
@@ -56,7 +67,7 @@ export default function CustomerDetailPage() {
     return (
       <div>
         <PageHeader title="Customer" back />
-        <p className="p-6 text-center text-sm text-slate-500">Customer not found.</p>
+        <p className="p-6 text-center text-sm text-muted-foreground">Customer not found.</p>
       </div>
     );
   }
@@ -64,54 +75,61 @@ export default function CustomerDetailPage() {
   return (
     <div>
       <PageHeader title={customer.name} back subtitle={customer.territory?.name} />
-      <div className="space-y-4 px-4 pt-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          {customer.address && <p className="text-sm text-slate-600">{customer.address}</p>}
-          {customer.notes && <p className="mt-2 text-xs italic text-slate-400">{customer.notes}</p>}
+      <div className="space-y-5 px-4 pb-8 pt-4">
+        <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-card">
+          {customer.address && <p className="text-sm text-foreground/90">{customer.address}</p>}
+          {customer.notes && <p className="mt-2 text-xs italic text-muted-foreground">{customer.notes}</p>}
 
           <div className="mt-4 flex gap-2">
             {customer.phone && (
-              <a
-                href={`tel:${customer.phone}`}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-700 active:bg-slate-50"
-              >
-                <PhoneIcon className="h-4 w-4" />
-                Call
-              </a>
+              <Button variant="outline" size="lg" className="flex-1" asChild>
+                <a href={`tel:${customer.phone}`}>
+                  <Phone className="h-4 w-4" />
+                  Call
+                </a>
+              </Button>
             )}
             {customer.lat != null && customer.lng != null && (
-              <a
-                href={mapsLink(customer.lat, customer.lng)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-700 active:bg-slate-50"
-              >
-                <NavigationIcon className="h-4 w-4" />
-                Directions
-              </a>
+              <Button variant="outline" size="lg" className="flex-1" asChild>
+                <a href={mapsLink(customer.lat, customer.lng)} target="_blank" rel="noreferrer">
+                  <Navigation className="h-4 w-4" />
+                  Navigate
+                </a>
+              </Button>
             )}
           </div>
 
-          <button
-            onClick={startVisit}
-            disabled={startingVisit}
-            className="mt-3 w-full rounded-xl bg-brand-600 py-3.5 text-sm font-extrabold text-white active:bg-brand-700 disabled:opacity-60"
-          >
+          <Button size="lg" className="mt-3 h-14 w-full text-base shadow-md" onClick={startVisit} loading={startingVisit}>
             {startingVisit ? "Starting…" : "Start Visit"}
-          </button>
+          </Button>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button variant="secondary" size="lg" className="text-sm" asChild>
+              <Link href={`/quotations/new?customerId=${customer.id}`}>
+                <FileText className="h-4 w-4" />
+                Quotation
+              </Link>
+            </Button>
+            <Button variant="secondary" size="lg" className="text-sm" asChild>
+              <Link href={`/orders/new?customerId=${customer.id}`}>
+                <ReceiptText className="h-4 w-4" />
+                Order
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {!!customer.recentVisits?.length && (
           <section>
-            <h2 className="mb-2 text-sm font-bold text-slate-700">Recent Visits</h2>
+            <h2 className="mb-2 text-sm font-bold text-foreground">Recent Visits</h2>
             <ul className="space-y-2">
               {customer.recentVisits.map((v) => (
-                <li key={v.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                <li key={v.id} className="rounded-xl border border-border/60 bg-card p-3 text-sm shadow-card">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-800">{v.status.replace("_", " ")}</span>
-                    <span className="text-xs text-slate-400">{format(new Date(v.createdAt), "d MMM, h:mm a")}</span>
+                    <Badge variant={VISIT_STATUS_VARIANT[v.status] ?? "muted"}>{v.status.replace("_", " ")}</Badge>
+                    <span className="text-xs text-muted-foreground">{format(new Date(v.createdAt), "d MMM, h:mm a")}</span>
                   </div>
-                  {v.outcome && <p className="mt-1 text-xs text-slate-500">{v.outcome.replace(/_/g, " ")}</p>}
+                  {v.outcome && <p className="mt-1.5 text-xs text-muted-foreground">{v.outcome.replace(/_/g, " ")}</p>}
                 </li>
               ))}
             </ul>
@@ -120,12 +138,12 @@ export default function CustomerDetailPage() {
 
         {!!customer.recentOrders?.length && (
           <section>
-            <h2 className="mb-2 text-sm font-bold text-slate-700">Recent Orders</h2>
+            <h2 className="mb-2 text-sm font-bold text-foreground">Recent Orders</h2>
             <ul className="space-y-2">
               {customer.recentOrders.map((o) => (
-                <li key={o.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                  <span className="text-xs text-slate-400">{format(new Date(o.createdAt), "d MMM")}</span>
-                  <span className="font-bold text-slate-800">{formatCurrency(o.grandTotal)}</span>
+                <li key={o.id} className="flex items-center justify-between rounded-xl border border-border/60 bg-card p-3 text-sm shadow-card">
+                  <span className="text-xs text-muted-foreground">{format(new Date(o.createdAt), "d MMM")}</span>
+                  <span className="font-bold text-foreground">{formatCurrency(o.grandTotal)}</span>
                 </li>
               ))}
             </ul>
@@ -134,12 +152,12 @@ export default function CustomerDetailPage() {
 
         {!!customer.recentCollections?.length && (
           <section>
-            <h2 className="mb-2 text-sm font-bold text-slate-700">Recent Collections</h2>
+            <h2 className="mb-2 text-sm font-bold text-foreground">Recent Collections</h2>
             <ul className="space-y-2">
               {customer.recentCollections.map((c) => (
-                <li key={c.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                  <span className="text-xs text-slate-400">{format(new Date(c.createdAt), "d MMM")}</span>
-                  <span className="font-bold text-emerald-600">{formatCurrency(c.amount)}</span>
+                <li key={c.id} className="flex items-center justify-between rounded-xl border border-border/60 bg-card p-3 text-sm shadow-card">
+                  <span className="text-xs text-muted-foreground">{format(new Date(c.createdAt), "d MMM")}</span>
+                  <span className="font-bold text-success">{formatCurrency(c.amount)}</span>
                 </li>
               ))}
             </ul>

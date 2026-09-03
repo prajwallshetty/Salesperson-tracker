@@ -1,21 +1,33 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import toast from "react-hot-toast";
-import { Modal } from "@/components/Modal";
-import { FieldWrap, TextField, TextArea } from "@/components/FormField";
-import { IconImage } from "@/components/icons";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import { ImageIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Field } from "@/components/form/Field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { api, apiErrorMessage, assetUrl } from "@/lib/api";
 import type { Product } from "@/types";
 
-interface ProductModalProps {
-  open: boolean;
-  product: Product | null;
-  onClose: () => void;
-  onSaved: () => void;
-}
+const schema = z.object({
+  name: z.string().min(1, "Product name is required"),
+  sku: z.string().min(1, "SKU is required"),
+  category: z.string().min(1, "Category is required"),
+  unit: z.string().min(1, "Unit is required"),
+  price: z.string().min(1, "Price is required").refine((v) => Number(v) >= 0, "Enter a valid price"),
+  taxPercent: z.string().min(1, "Tax % is required").refine((v) => Number(v) >= 0, "Enter a valid tax %"),
+  discountPercent: z.string().refine((v) => v === "" || Number(v) >= 0, "Enter a valid discount %"),
+  description: z.string().optional(),
+});
 
-const emptyForm = {
+type FormValues = z.infer<typeof schema>;
+
+const emptyForm: FormValues = {
   name: "",
   sku: "",
   category: "",
@@ -26,18 +38,30 @@ const emptyForm = {
   description: "",
 };
 
+interface ProductModalProps {
+  open: boolean;
+  product: Product | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
 export function ProductModal({ open, product, onClose, onSaved }: ProductModalProps) {
-  const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: emptyForm });
 
   useEffect(() => {
     if (!open) return;
     setImageFile(null);
     if (product) {
-      setForm({
+      reset({
         name: product.name,
         sku: product.sku,
         category: product.category,
@@ -49,13 +73,10 @@ export function ProductModal({ open, product, onClose, onSaved }: ProductModalPr
       });
       setPreview(assetUrl(product.imageUrl));
     } else {
-      setForm(emptyForm);
+      reset(emptyForm);
       setPreview(null);
     }
-  }, [open, product]);
-
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  }, [open, product, reset]);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,19 +92,17 @@ export function ProductModal({ open, product, onClose, onSaved }: ProductModalPr
     await api.post(`/products/${productId}/image`, fd, { headers: { "Content-Type": "multipart/form-data" } });
   };
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
+  const onSubmit = async (values: FormValues) => {
     try {
       const payload = {
-        name: form.name,
-        sku: form.sku,
-        category: form.category,
-        unit: form.unit,
-        price: Number(form.price),
-        taxPercent: Number(form.taxPercent),
-        discountPercent: Number(form.discountPercent || 0),
-        description: form.description || undefined,
+        name: values.name,
+        sku: values.sku,
+        category: values.category,
+        unit: values.unit,
+        price: Number(values.price),
+        taxPercent: Number(values.taxPercent),
+        discountPercent: Number(values.discountPercent || 0),
+        description: values.description || undefined,
       };
       if (product) {
         await api.patch(`/products/${product.id}`, payload);
@@ -99,78 +118,74 @@ export function ProductModal({ open, product, onClose, onSaved }: ProductModalPr
       onClose();
     } catch (err) {
       toast.error(apiErrorMessage(err, "Failed to save product"));
-    } finally {
-      setBusy(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={product ? "Edit Product" : "Add Product"} width="max-w-2xl">
-      <form onSubmit={onSubmit}>
-        <div className="mb-4 flex items-center gap-4">
-          <div
-            onClick={() => fileRef.current?.click()}
-            className="flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-brand-400 hover:text-brand-500"
-          >
-            {preview ? (
-              <img src={preview} alt="Preview" className="h-full w-full object-cover" />
-            ) : (
-              <IconImage className="h-7 w-7" />
-            )}
-          </div>
-          <div>
-            <button
-              type="button"
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{product ? "Edit Product" : "Add Product"}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <div className="mb-4 flex items-center gap-4">
+            <div
               onClick={() => fileRef.current?.click()}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              className="flex size-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-input bg-muted/40 text-muted-foreground transition hover:border-primary hover:text-primary"
             >
-              Upload image
-            </button>
-            <p className="mt-1 text-xs text-slate-400">PNG or JPG, uploaded on save.</p>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
+              {preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview} alt="Preview" className="h-full w-full object-cover" />
+              ) : (
+                <ImageIcon className="size-7" />
+              )}
+            </div>
+            <div>
+              <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                Upload image
+              </Button>
+              <p className="mt-1 text-xs text-muted-foreground">PNG or JPG, uploaded on save.</p>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-          <FieldWrap label="Product name" required>
-            <TextField required value={form.name} onChange={set("name")} placeholder="Green Tea 100 bags" />
-          </FieldWrap>
-          <FieldWrap label="SKU" required>
-            <TextField required value={form.sku} onChange={set("sku")} placeholder="SKU-1011" />
-          </FieldWrap>
-          <FieldWrap label="Category" required>
-            <TextField required value={form.category} onChange={set("category")} placeholder="Beverages" />
-          </FieldWrap>
-          <FieldWrap label="Unit" required>
-            <TextField required value={form.unit} onChange={set("unit")} placeholder="Box / Case (48)" />
-          </FieldWrap>
-          <FieldWrap label="Price (₹)" required>
-            <TextField type="number" step="0.01" required min={0} value={form.price} onChange={set("price")} />
-          </FieldWrap>
-          <FieldWrap label="Tax %" required>
-            <TextField type="number" step="0.01" required min={0} value={form.taxPercent} onChange={set("taxPercent")} />
-          </FieldWrap>
-          <FieldWrap label="Discount %">
-            <TextField type="number" step="0.01" min={0} value={form.discountPercent} onChange={set("discountPercent")} />
-          </FieldWrap>
-        </div>
-        <FieldWrap label="Description">
-          <TextArea rows={3} value={form.description} onChange={set("description")} placeholder="Short product description" />
-        </FieldWrap>
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <Field label="Product name" required error={errors.name?.message}>
+              <Input {...register("name")} placeholder="Green Tea 100 bags" />
+            </Field>
+            <Field label="SKU" required error={errors.sku?.message}>
+              <Input {...register("sku")} placeholder="SKU-1011" />
+            </Field>
+            <Field label="Category" required error={errors.category?.message}>
+              <Input {...register("category")} placeholder="Beverages" />
+            </Field>
+            <Field label="Unit" required error={errors.unit?.message}>
+              <Input {...register("unit")} placeholder="Box / Case (48)" />
+            </Field>
+            <Field label="Price (₹)" required error={errors.price?.message}>
+              <Input type="number" step="0.01" min={0} {...register("price")} />
+            </Field>
+            <Field label="Tax %" required error={errors.taxPercent?.message}>
+              <Input type="number" step="0.01" min={0} {...register("taxPercent")} />
+            </Field>
+            <Field label="Discount %" error={errors.discountPercent?.message}>
+              <Input type="number" step="0.01" min={0} {...register("discountPercent")} />
+            </Field>
+          </div>
+          <Field label="Description">
+            <Textarea rows={3} {...register("description")} placeholder="Short product description" />
+          </Field>
 
-        <div className="mt-2 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-          >
-            {busy ? "Saving..." : product ? "Save Changes" : "Create Product"}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting}>
+              {product ? "Save Changes" : "Create Product"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -2,22 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { FileText, Plus } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { SkeletonList } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
-import { BoxIcon, PlusIcon } from "@/components/icons";
-import type { Quotation } from "@/types";
-import { format } from "date-fns";
-import clsx from "clsx";
+import type { Quotation, QuotationStatus } from "@/types";
 
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  SENT: "bg-blue-100 text-blue-700",
-  ACCEPTED: "bg-emerald-100 text-emerald-700",
-  REJECTED: "bg-red-100 text-red-700",
+const STATUS_VARIANT: Record<QuotationStatus, "muted" | "info" | "success" | "danger"> = {
+  DRAFT: "muted",
+  SENT: "info",
+  ACCEPTED: "success",
+  REJECTED: "danger",
 };
 
 export default function QuotationsPage() {
@@ -38,35 +39,35 @@ export default function QuotationsPage() {
         title="Quotations"
         back
         right={
-          <Link href="/quotations/new" className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white active:bg-brand-700">
-            <PlusIcon className="h-5 w-5" />
-          </Link>
+          <Button size="icon" className="h-9 w-9 rounded-full" asChild>
+            <Link href="/quotations/new" aria-label="New quotation">
+              <Plus className="h-5 w-5" />
+            </Link>
+          </Button>
         }
       />
       <div className="px-4 pt-4">
         {loading ? (
           <SkeletonList count={4} />
         ) : quotations.length === 0 ? (
-          <EmptyState icon={<BoxIcon className="h-10 w-10 text-slate-300" />} title="No quotations yet" />
+          <EmptyState icon={<FileText />} title="No quotations yet" />
         ) : (
           <ul className="space-y-3">
             {quotations.map((q) => (
               <li key={q.id}>
-                <Link href={`/quotations/${q.id}`} className="block rounded-2xl border border-slate-200 bg-white p-4">
+                <Link href={`/quotations/${q.id}`} className="block rounded-2xl border border-border/60 bg-card p-4 shadow-card">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-bold text-slate-900">{q.customer?.name ?? q.number}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="font-bold text-foreground">{q.customer?.name ?? q.number}</p>
+                      <p className="text-xs text-muted-foreground">
                         {q.number} · {format(new Date(q.createdAt), "d MMM yyyy")}
                       </p>
                     </div>
-                    <span className={clsx("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold", STATUS_COLORS[q.status])}>
-                      {q.status}
-                    </span>
+                    <Badge variant={STATUS_VARIANT[q.status]}>{q.status}</Badge>
                   </div>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-slate-400">{q.items?.length ?? 0} item(s)</span>
-                    <span className="text-base font-extrabold text-slate-900">{formatCurrency(q.grandTotal)}</span>
+                  <div className="mt-2.5 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">{q.items?.length ?? 0} item(s)</span>
+                    <span className="text-base font-extrabold text-foreground">{formatCurrency(q.grandTotal)}</span>
                   </div>
                 </Link>
               </li>

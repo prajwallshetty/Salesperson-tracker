@@ -2,22 +2,28 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import clsx from "clsx";
-import { HomeIcon, UsersIcon, TargetIcon, BoxIcon, MoreIcon } from "./icons";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { Home, Users, MapPinned, Package, Ellipsis } from "lucide-react";
 
 const tabs = [
-  { to: "/home", label: "Home", icon: HomeIcon, matchPrefixes: ["/home"] },
-  { to: "/customers", label: "Customers", icon: UsersIcon, matchPrefixes: ["/customers", "/visits"] },
-  { to: "/follow-ups", label: "Leads", icon: TargetIcon, matchPrefixes: ["/follow-ups", "/leads"] },
-  { to: "/orders", label: "Orders", icon: BoxIcon, matchPrefixes: ["/orders", "/quotations", "/collections"] },
-  { to: "/more", label: "More", icon: MoreIcon, matchPrefixes: ["/more", "/performance", "/notifications", "/profile"] },
+  { to: "/home", label: "Home", icon: Home, matchPrefixes: ["/home"] },
+  { to: "/customers", label: "Customers", icon: Users, matchPrefixes: ["/customers"] },
+  { to: "/visits", label: "Visits", icon: MapPinned, matchPrefixes: ["/visits"] },
+  { to: "/orders", label: "Orders", icon: Package, matchPrefixes: ["/orders", "/quotations", "/collections"] },
+  {
+    to: "/more",
+    label: "More",
+    icon: Ellipsis,
+    matchPrefixes: ["/more", "/performance", "/notifications", "/profile", "/leads", "/follow-ups"],
+  },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-card/95 backdrop-blur-md"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="mx-auto flex max-w-lg items-stretch justify-between px-1">
@@ -27,13 +33,22 @@ export function BottomNav() {
             <Link
               key={to}
               href={to}
-              className={clsx(
-                "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
-                isActive ? "text-brand-600" : "text-slate-400"
-              )}
+              className="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-semibold"
             >
-              <Icon className="h-6 w-6" strokeWidth={isActive ? 2.4 : 2} />
-              <span>{label}</span>
+              <span className="relative flex h-8 w-12 items-center justify-center">
+                {isActive && (
+                  <motion.span
+                    layoutId="bottomNavActivePill"
+                    className="absolute inset-0 rounded-full bg-primary-soft"
+                    transition={{ type: "spring", stiffness: 500, damping: 34 }}
+                  />
+                )}
+                <Icon
+                  className={cn("relative h-5 w-5 transition-colors", isActive ? "text-primary" : "text-muted-foreground")}
+                  strokeWidth={isActive ? 2.4 : 2}
+                />
+              </span>
+              <span className={cn("transition-colors", isActive ? "text-primary" : "text-muted-foreground")}>{label}</span>
             </Link>
           );
         })}

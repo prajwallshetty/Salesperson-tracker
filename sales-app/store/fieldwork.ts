@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { connectSocket, getSocket, isSocketConnected } from "@/lib/socket";
 import {

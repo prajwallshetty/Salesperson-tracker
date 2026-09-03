@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
+import { FileCheck2 } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
-import { SelectField } from "@/components/FormField";
+import { PageHeader } from "@/components/PageHeader";
+import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/Skeleton";
+import { StatusBadge } from "@/components/StatusBadge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { IconQuote } from "@/components/icons";
 import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
@@ -69,93 +76,83 @@ export default function QuotationsListPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Quotations</h1>
-        <p className="text-sm text-slate-400">Track quotations raised by the field team.</p>
-      </div>
+      <PageHeader title="Quotations" description="Track quotations raised by the field team." />
 
       <div className="flex flex-wrap items-center gap-3">
-        <SelectField value={status} onChange={(e) => setStatus(e.target.value)} className="w-auto max-w-[170px]">
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)} className="w-auto max-w-[190px]">
-          <option value="">All salespersons</option>
-          {salespersons.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.user.name}
-            </option>
-          ))}
-        </SelectField>
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
-        <span className="text-sm text-slate-400">to</span>
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+        <FilterSelect
+          value={status}
+          onChange={setStatus}
+          placeholder="All statuses"
+          options={STATUSES.map((s) => ({ value: s, label: s }))}
+        />
+        <FilterSelect
+          value={salespersonId}
+          onChange={setSalespersonId}
+          placeholder="All salespersons"
+          options={salespersons.map((s) => ({ value: s.id, label: s.user.name }))}
+        />
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
+        <span className="text-sm text-muted-foreground">to</span>
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Salesperson</th>
-                <th className="px-4 py-3 font-medium">Created</th>
-                <th className="px-4 py-3 font-medium text-right">Total</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10">
-                    <EmptyState icon={<IconQuote className="h-6 w-6" />} title="No quotations found" message="Quotations created by salespersons will appear here." />
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((q) => (
-                  <tr key={q.id} className="transition hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-700">{q.customer?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{q.salesperson?.user?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{formatDate(q.createdAt)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatCurrency(q.grandTotal)}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={q.status}
-                        onChange={(e) => updateStatus(q, e.target.value)}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 outline-none focus:border-brand-400"
-                      >
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Customer</TableHead>
+            <TableHead>Salesperson</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
+          ) : filtered.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="py-10">
+                <EmptyState icon={<IconQuote className="size-5" />} title="No quotations found" message="Quotations created by salespersons will appear here." />
+              </TableCell>
+            </TableRow>
+          ) : (
+            filtered.map((q) => (
+              <TableRow key={q.id}>
+                <TableCell className="font-medium text-foreground">{q.customer?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{q.salesperson?.user?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(q.createdAt)}</TableCell>
+                <TableCell className="text-right font-semibold text-foreground">{formatCurrency(q.grandTotal)}</TableCell>
+                <TableCell>
+                  {STATUSES.includes(q.status) ? (
+                    <Select value={q.status} onValueChange={(v) => updateStatus(q, v)}>
+                      <SelectTrigger className="h-8 w-32 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
                         {STATUSES.map((s) => (
-                          <option key={s} value={s}>
+                          <SelectItem key={s} value={s}>
                             {s}
-                          </option>
+                          </SelectItem>
                         ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {q.status === "ACCEPTED" && (
-                        <button
-                          onClick={() => convertToOrder(q)}
-                          disabled={busyId === q.id}
-                          className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50"
-                        >
-                          {busyId === q.id ? "Converting..." : "Convert to Order"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <StatusBadge status={q.status} />
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  {q.status === "ACCEPTED" && (
+                    <Button variant="outline" size="sm" disabled={busyId === q.id} loading={busyId === q.id} onClick={() => convertToOrder(q)}>
+                      <FileCheck2 /> Convert to Order
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

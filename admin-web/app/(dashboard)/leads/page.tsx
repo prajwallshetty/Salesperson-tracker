@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
+import { Flame } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
+import { PageHeader } from "@/components/PageHeader";
 import { SearchInput } from "@/components/SearchInput";
-import { SelectField } from "@/components/FormField";
+import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/Skeleton";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/format";
-import { IconLeads } from "@/components/icons";
 import { useSalespersonOptions } from "@/hooks/useSalespersonOptions";
 import type { Lead } from "@/types";
 
@@ -55,85 +59,70 @@ export default function LeadsListPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Leads</h1>
-        <p className="text-sm text-slate-400">Monitor leads captured by your field team.</p>
-      </div>
+      <PageHeader title="Leads" description="Monitor leads captured by your field team." />
 
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name, company..." className="w-full max-w-xs" />
-        <SelectField value={status} onChange={(e) => setStatus(e.target.value)} className="w-auto max-w-[170px]">
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replace(/_/g, " ")}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)} className="w-auto max-w-[190px]">
-          <option value="">All salespersons</option>
-          {salespersons.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.user.name}
-            </option>
-          ))}
-        </SelectField>
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
-        <span className="text-sm text-slate-400">to</span>
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+        <FilterSelect value={status} onChange={setStatus} placeholder="All statuses" options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))} />
+        <FilterSelect
+          value={salespersonId}
+          onChange={setSalespersonId}
+          placeholder="All salespersons"
+          options={salespersons.map((s) => ({ value: s.id, label: s.user.name }))}
+        />
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
+        <span className="text-sm text-muted-foreground">to</span>
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Lead</th>
-                <th className="px-4 py-3 font-medium">Salesperson</th>
-                <th className="px-4 py-3 font-medium">Source</th>
-                <th className="px-4 py-3 font-medium">Created</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10">
-                    <EmptyState icon={<IconLeads className="h-6 w-6" />} title="No leads found" message="Leads created by salespersons in the field will appear here." />
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((l) => (
-                  <tr key={l.id} className="transition hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-700">{l.name}</p>
-                      <p className="text-xs text-slate-400">{l.company ?? l.phone ?? "-"}</p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{l.salesperson?.user?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{l.source ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{formatDate(l.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={l.status}
-                        onChange={(e) => updateStatus(l, e.target.value)}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 outline-none focus:border-brand-400"
-                      >
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {s.replace(/_/g, " ")}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Lead</TableHead>
+            <TableHead>Salesperson</TableHead>
+            <TableHead>Source</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+          ) : filtered.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={5} className="py-10">
+                <EmptyState icon={<Flame className="size-5" />} title="No leads found" message="Leads created by salespersons in the field will appear here." />
+              </TableCell>
+            </TableRow>
+          ) : (
+            filtered.map((l) => (
+              <TableRow key={l.id}>
+                <TableCell>
+                  <p className="font-medium text-foreground">{l.name}</p>
+                  <p className="text-xs text-muted-foreground">{l.company ?? l.phone ?? "-"}</p>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{l.salesperson?.user?.name ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{l.source ?? "-"}</TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(l.createdAt)}</TableCell>
+                <TableCell>
+                  <Select value={l.status} onValueChange={(v) => updateStatus(l, v)}>
+                    <SelectTrigger className="h-8 w-40 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s.replace(/_/g, " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Modal } from "@/components/Modal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -26,8 +27,6 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const [busy, setBusy] = useState(false);
 
-  if (!open) return null;
-
   const handleConfirm = async () => {
     setBusy(true);
     try {
@@ -39,30 +38,26 @@ export function ConfirmDialog({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={title} width="max-w-sm">
-      {message && <p className="text-sm text-slate-500">{message}</p>}
-      <div className="mt-6 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-        >
-          {cancelLabel}
-        </button>
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={busy}
-          className={
-            tone === "danger"
-              ? "rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
-              : "rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
-          }
-        >
-          {busy ? "Please wait..." : confirmLabel}
-        </button>
-      </div>
-    </Modal>
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {message && <DialogDescription>{message}</DialogDescription>}
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+            {cancelLabel}
+          </Button>
+          <Button
+            type="button"
+            variant={tone === "danger" ? "destructive" : "primary"}
+            onClick={handleConfirm}
+            loading={busy}
+          >
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

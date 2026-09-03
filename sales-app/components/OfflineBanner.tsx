@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { WifiOff, RefreshCw } from "lucide-react";
 import { useFieldWorkStore } from "@/store/fieldwork";
 
 export function OfflineBanner() {
@@ -26,11 +27,21 @@ export function OfflineBanner() {
     <div
       className={
         "flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-semibold text-white " +
-        (online ? "bg-amber-500" : "bg-slate-700")
+        (online ? "bg-warning" : "bg-slate-700")
       }
     >
-      {!online && <span>You&apos;re offline. Location pings are being saved and will sync automatically.</span>}
-      {online && pendingCount > 0 && <span>Syncing {pendingCount} saved location point{pendingCount === 1 ? "" : "s"}…</span>}
+      {!online && (
+        <>
+          <WifiOff className="h-3.5 w-3.5" />
+          <span>You&apos;re offline. Location pings are being saved and will sync automatically.</span>
+        </>
+      )}
+      {online && pendingCount > 0 && (
+        <>
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          <span>Syncing {pendingCount} saved location point{pendingCount === 1 ? "" : "s"}…</span>
+        </>
+      )}
     </div>
   );
 }

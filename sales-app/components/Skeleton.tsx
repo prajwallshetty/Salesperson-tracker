@@ -1,16 +1,11 @@
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div className={clsx("relative overflow-hidden rounded-xl bg-slate-200/70", className)}>
-      <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
-    </div>
-  );
-}
+export { Skeleton };
 
-export function SkeletonCard() {
+export function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+    <div className={cn("space-y-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card", className)}>
       <Skeleton className="h-4 w-2/3" />
       <Skeleton className="h-3 w-1/2" />
       <Skeleton className="h-3 w-1/3" />

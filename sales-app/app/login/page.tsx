@@ -2,8 +2,13 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -63,67 +68,78 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-gradient-to-b from-brand-600 to-brand-800 px-6 py-10">
-      <div className="mx-auto w-full max-w-sm">
+    <div className="relative flex min-h-screen flex-col justify-center overflow-hidden bg-gradient-to-b from-primary via-primary to-[hsl(262_65%_32%)] px-6 py-10">
+      {/* Soft decorative glow, purely presentational */}
+      <div className="pointer-events-none absolute -top-24 -left-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -right-10 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="relative mx-auto w-full max-w-sm"
+      >
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-3xl font-black text-white shadow-lg backdrop-blur">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-2xl font-black tracking-tight text-white shadow-lg backdrop-blur">
             SF
           </div>
-          <h1 className="text-2xl font-extrabold text-white">SalesForce Pro</h1>
-          <p className="mt-1 text-sm text-brand-100">Field App for Salespeople</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">SalesForce Pro</h1>
+          <p className="mt-1 text-sm text-white/70">Field App for Salespeople</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl bg-white p-6 shadow-2xl">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Email
-            </label>
-            <input
-              type="email"
-              autoComplete="username"
-              inputMode="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@salesforcepro.com"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Password
-            </label>
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 rounded-3xl border border-white/10 bg-card p-6 shadow-2xl"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
             <div className="relative">
-              <input
+              <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="username"
+                inputMode="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@salesforcepro.com"
+                className="h-[3.25rem] py-3.5 pl-10 text-base"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3.5 pr-16 text-base outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                className="h-[3.25rem] py-3.5 pl-10 pr-11 text-base"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-brand-600"
+                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition active:bg-muted"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? "Hide" : "Show"}
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-2 w-full rounded-xl bg-brand-600 py-4 text-base font-bold text-white shadow-lg shadow-brand-600/30 transition active:scale-[0.98] disabled:opacity-60"
-          >
+          <Button type="submit" size="lg" loading={submitting} className="mt-2 h-14 w-full text-base shadow-lg shadow-primary/30">
             {submitting ? "Signing in…" : "Sign In"}
-          </button>
+          </Button>
 
-          <p className="pt-1 text-center text-[11px] text-slate-400">
+          <p className="pt-1 text-center text-[11px] text-muted-foreground">
             This app is for field salespeople only.
           </p>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }
