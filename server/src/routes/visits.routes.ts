@@ -117,6 +117,18 @@ router.post(
   "/:id/checkin",
   asyncHandler(async (req, res) => {
     const { lat, lng } = z.object({ lat: z.number(), lng: z.number() }).parse(req.body);
+
+    const existing = await prisma.visit.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Visit not found" });
+    if (req.auth!.role === "SALESPERSON" && existing.salespersonId !== req.auth!.salespersonId) {
+      return res.status(403).json({ error: "This visit does not belong to you" });
+    }
+    if (existing.status !== "PLANNED") {
+      return res.status(409).json({
+        error: `Cannot check in: visit is already ${existing.status.replace(/_/g, " ").toLowerCase()}`,
+      });
+    }
+
     const visit = await prisma.visit.update({
       where: { id: req.params.id },
       data: { status: "IN_PROGRESS", checkInAt: new Date(), checkInLat: lat, checkInLng: lng },
@@ -157,6 +169,17 @@ router.post(
 
     const existing = await prisma.visit.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Visit not found" });
+    if (req.auth!.role === "SALESPERSON" && existing.salespersonId !== req.auth!.salespersonId) {
+      return res.status(403).json({ error: "This visit does not belong to you" });
+    }
+    if (existing.status !== "IN_PROGRESS") {
+      return res.status(409).json({
+        error:
+          existing.status === "COMPLETED"
+            ? "This visit is already checked out"
+            : `Cannot check out: visit has not been checked in (status is ${existing.status.replace(/_/g, " ").toLowerCase()})`,
+      });
+    }
 
     const checkOutAt = new Date();
     const durationMin = existing.checkInAt
