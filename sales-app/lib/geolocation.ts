@@ -54,6 +54,44 @@ export function isGeolocationSupported(): boolean {
   return "geolocation" in navigator;
 }
 
+function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+const MIN_SEND_GAP_MS = 3000;
+const MIN_SEND_DISTANCE_M = 25;
+const MAX_SEND_INTERVAL_MS = 60000;
+
+/**
+ * Decides whether a new GPS fix is worth sending to the backend, instead of relaying every raw
+ * `watchPosition` callback (which can fire multiple times a minute even while stationary under
+ * `enableHighAccuracy`). A fix is sent when it represents real movement (>= MIN_SEND_DISTANCE_M,
+ * which also absorbs normal consumer-GPS jitter of a few meters while stationary), or
+ * unconditionally every MAX_SEND_INTERVAL_MS so a stationary salesperson still produces a
+ * periodic heartbeat (keeps isOnline/lastSeenAt fresh on the admin side). Movement is deliberately
+ * NOT gated by a time floor beyond a tiny anti-duplicate debounce (MIN_SEND_GAP_MS) - a salesperson
+ * moving fast (e.g. by vehicle) can cover MIN_SEND_DISTANCE_M in well under a naive "wait N seconds"
+ * floor, and suppressing that would compromise route accuracy for the sake of throttling that a
+ * distance threshold already achieves at any realistic travel speed.
+ */
+export function shouldSendLocationUpdate(
+  candidate: GeoPoint,
+  lastSent: { point: GeoPoint; sentAtMs: number } | null
+): boolean {
+  if (!lastSent) return true;
+  const elapsedMs = Date.now() - lastSent.sentAtMs;
+  if (elapsedMs < MIN_SEND_GAP_MS) return false;
+  if (elapsedMs >= MAX_SEND_INTERVAL_MS) return true;
+  const movedM = haversineMeters(lastSent.point, candidate);
+  return movedM >= MIN_SEND_DISTANCE_M;
+}
+
 /** One-shot fix. Rejects with GeoError on failure. Never returns a fabricated point. */
 export function getCurrentPosition(options?: PositionOptions): Promise<GeoPoint> {
   return new Promise((resolve, reject) => {
