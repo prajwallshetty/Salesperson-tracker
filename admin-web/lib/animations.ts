@@ -79,7 +79,10 @@ export const buttonTap = { scale: 0.98 };
 export function fadeOnly(variants: Variants): Variants {
   const strip = (v: Variants[string]) => {
     if (typeof v !== "object" || v === null) return v;
-    const { x: _x, y: _y, scale: _scale, ...rest } = v as Record<string, unknown>;
+    const rest = { ...(v as Record<string, unknown>) };
+    delete rest.x;
+    delete rest.y;
+    delete rest.scale;
     return rest;
   };
   return Object.fromEntries(Object.entries(variants).map(([k, v]) => [k, strip(v)])) as Variants;
