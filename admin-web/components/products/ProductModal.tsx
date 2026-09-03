@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { Modal } from "@/components/Modal";
 import { FieldWrap, TextField, TextArea } from "@/components/FormField";
 import { IconImage } from "@/components/icons";

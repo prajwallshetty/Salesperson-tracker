@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { api, apiErrorMessage, assetUrl } from "@/lib/api";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";

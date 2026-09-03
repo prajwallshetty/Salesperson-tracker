@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
 import { apiErrorMessage } from "@/lib/api";
 

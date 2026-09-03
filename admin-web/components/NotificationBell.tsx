@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { subscribe } from "@/lib/socket";
 import { relativeTime } from "@/lib/format";
@@ -33,18 +33,14 @@ export function NotificationBell() {
       setItems((prev) => [{ ...payload, id: `temp-${Date.now()}`, isRead: false } as Notification, ...prev].slice(0, 100));
       setUnread((n) => n + 1);
       toast.custom(
-        (t) => (
-          <div
-            className={`pointer-events-auto flex w-80 items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-card-hover ${
-              t.visible ? "animate-[toastSlideDown_.2s_ease-out]" : ""
-            }`}
-          >
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+        () => (
+          <div className="pointer-events-auto flex w-80 items-start gap-3 rounded-2xl border border-border/60 bg-card p-3.5 shadow-popover">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
               <IconBell className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-800">{payload.title}</p>
-              <p className="line-clamp-2 text-xs text-slate-500">{payload.message}</p>
+              <p className="truncate text-sm font-semibold text-foreground">{payload.title}</p>
+              <p className="line-clamp-2 text-xs text-muted-foreground">{payload.message}</p>
             </div>
           </div>
         ),

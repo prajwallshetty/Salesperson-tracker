@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { CartLineRow, CustomerSelect, ProductPickerModal, TotalsSummary, useCart } from "@/components/ProductPicker";

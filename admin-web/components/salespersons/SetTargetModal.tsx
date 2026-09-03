@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { Modal } from "@/components/Modal";
 import { FieldWrap, TextField, SelectField } from "@/components/FormField";
 import { api, apiErrorMessage } from "@/lib/api";

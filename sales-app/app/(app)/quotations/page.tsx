@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { SkeletonList } from "@/components/Skeleton";

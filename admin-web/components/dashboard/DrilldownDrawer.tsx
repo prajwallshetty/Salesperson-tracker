@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Avatar";
 import { api, apiErrorMessage } from "@/lib/api";
 import { formatCurrency, formatDateTime, relativeTime } from "@/lib/format";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import type { Collection, FollowUp, Order, Salesperson, TargetRow, TopPerformerRow, Visit } from "@/types";
 
 export type DrilldownKind =

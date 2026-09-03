@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { api, apiErrorMessage } from "@/lib/api";
 import { subscribe } from "@/lib/socket";

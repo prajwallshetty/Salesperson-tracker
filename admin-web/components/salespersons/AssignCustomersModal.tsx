@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { Modal } from "@/components/Modal";
 import { SearchInput } from "@/components/SearchInput";
 import { EmptyState } from "@/components/EmptyState";

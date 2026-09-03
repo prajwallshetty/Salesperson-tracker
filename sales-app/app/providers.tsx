@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Toaster } from "react-hot-toast";
-import toast from "react-hot-toast";
+import { Toaster, toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
 import { useFieldWorkStore } from "@/store/fieldwork";
 import { connectSocket } from "@/lib/socket";
@@ -65,7 +64,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Toaster position="top-center" toastOptions={{ duration: 3500 }} />
+      <Toaster
+        position="top-center"
+        richColors
+        toastOptions={{
+          duration: 3500,
+          classNames: {
+            toast: "rounded-2xl border border-border/60 shadow-popover font-sans text-sm",
+            title: "font-semibold",
+          },
+        }}
+      />
       {children}
     </>
   );

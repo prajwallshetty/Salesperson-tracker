@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import clsx from "clsx";
 import { api, apiErrorMessage } from "@/lib/api";
 import { EmptyState } from "@/components/EmptyState";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Drawer } from "@/components/Drawer";
 import { Skeleton } from "@/components/Skeleton";
