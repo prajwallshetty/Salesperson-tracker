@@ -2,7 +2,7 @@
   "name": "SalesForce Pro — Field App",
   "short_name": "SalesForce",
   "description": "Field salesperson app for visits, orders and live GPS tracking",
-  "theme_color": "#2842ea",
+  "theme_color": "#7c3aed",
   "background_color": "#ffffff",
   "display": "standalone",
   "start_url": "/",
