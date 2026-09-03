@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MapContainer, Marker, TileLayer } from "react-leaflet";
 import { Radar } from "lucide-react";
 import { api } from "@/lib/api";
+import { subscribe } from "@/lib/socket";
 import { relativeTime } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
@@ -13,6 +14,14 @@ import { onlineIcon, offlineIcon } from "@/components/tracking/mapIcons";
 import type { LiveSalesperson } from "@/types";
 
 const DEFAULT_CENTER: [number, number] = [12.9716, 77.5946];
+
+interface LocationUpdatePayload {
+  salespersonId: string;
+  lat: number;
+  lng: number;
+  recordedAt: string;
+  isOnline: boolean;
+}
 
 export default function LiveTrackingCard() {
   const router = useRouter();
@@ -25,6 +34,25 @@ export default function LiveTrackingCard() {
       .then((res) => setItems(res.data ?? []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
+
+    // Keep this preview genuinely live instead of a snapshot frozen at mount time - same
+    // event the full /tracking page consumes, so a salesperson's dot here matches reality.
+    const unsubscribe = subscribe<LocationUpdatePayload>("location:update", (payload) => {
+      setItems((prev) => {
+        const idx = prev.findIndex((p) => p.id === payload.salespersonId);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          lastLat: payload.lat,
+          lastLng: payload.lng,
+          lastSeenAt: payload.recordedAt,
+          isOnline: payload.isOnline,
+        };
+        return next;
+      });
+    });
+    return unsubscribe;
   }, []);
 
   if (loading) return <Skeleton className="h-72 w-full" />;
