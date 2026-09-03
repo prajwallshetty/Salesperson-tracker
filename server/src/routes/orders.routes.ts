@@ -3,9 +3,10 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
-import { computeLine, computeDocumentTotals } from "../services/pricing";
+import { computeLine, computeDocumentTotals, resolvePricingForItems } from "../services/pricing";
 import { docNumber } from "../utils/geo";
 import { notifyAdmins } from "../services/notifications";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth);
@@ -66,17 +67,16 @@ router.post(
     const data = createSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
 
-    const products = await prisma.product.findMany({ where: { id: { in: data.items.map((i) => i.productId) } } });
-    const productMap = new Map(products.map((p) => [p.id, p]));
+    const { resolve } = await resolvePricingForItems(data.items.map((i) => i.productId), data.customerId);
     const lines = data.items.map((i) => {
-      const product = productMap.get(i.productId);
-      if (!product) throw Object.assign(new Error(`Product ${i.productId} not found`), { status: 400 });
+      const hit = resolve(i.productId);
+      if (!hit) throw Object.assign(new Error(`Product ${i.productId} not found`), { status: 400 });
       return {
         ...computeLine({
           quantity: i.quantity,
-          unitPrice: product.price,
-          discountPercent: i.discountPercent ?? product.discountPercent,
-          taxPercent: product.taxPercent,
+          unitPrice: hit.resolved.unitPrice,
+          discountPercent: i.discountPercent ?? hit.resolved.discountPercent,
+          taxPercent: hit.resolved.taxPercent,
         }),
         productId: i.productId,
       };
@@ -101,7 +101,11 @@ router.post(
           })),
         },
       },
-      include: { items: { include: { product: true } }, customer: true, salesperson: { include: { user: true } } },
+      include: {
+        items: { include: { product: true } },
+        customer: true,
+        salesperson: { include: { user: { select: SAFE_USER_SELECT } } },
+      },
     });
 
     await notifyAdmins(

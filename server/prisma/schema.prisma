@@ -103,6 +103,7 @@ model User {
   name         String
   phone        String?
   avatarUrl    String?
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -120,6 +121,7 @@ model Territory {
 
   salespersons Salesperson[]
   customers    Customer[]
+  priceLists   PriceList[]
 }
 
 model Salesperson {
@@ -186,6 +188,7 @@ model Customer {
   orders      Order[]
   collections Collection[]
   followUps   FollowUp[]
+  priceLists  PriceList[]
 
   @@index([salespersonId])
   @@index([territoryId])
@@ -208,9 +211,49 @@ model Product {
 
   quotationItems QuotationItem[]
   orderItems     OrderItem[]
+  priceLists     PriceList[]
 
   @@index([isActive])
   @@index([category])
+}
+
+// Standalone lookup table for product categories, managed by admins independently of
+// Product.category (which stays a plain string for backward compatibility with existing
+// product create/edit flows and category-filtered product queries). Category rows are matched
+// to products by name (Category.name <-> Product.category), not by a foreign key, so introducing
+// this table cannot change any existing product read/write behavior.
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Price overrides for a product, optionally scoped to a territory and/or a specific customer.
+// Resolution order (most specific wins): customer-specific > territory-specific > a generic
+// (no customerId/territoryId) active override > Product.price/discountPercent/taxPercent.
+model PriceList {
+  id              String     @id @default(cuid())
+  productId       String
+  product         Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  territoryId     String?
+  territory       Territory? @relation(fields: [territoryId], references: [id])
+  customerId      String?
+  customer        Customer?  @relation(fields: [customerId], references: [id])
+  price           Float
+  discountPercent Float      @default(0)
+  taxPercent      Float      @default(0)
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([productId, isActive])
+  @@index([territoryId])
+  @@index([customerId])
 }
 
 model Target {

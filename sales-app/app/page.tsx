@@ -1,29 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 
 // Equivalent of the old router's catch-all `<Navigate to={isAuthed ? "/home" : "/login"} replace />`.
+// Cookie-based auth: wait for Providers' GET /api/auth/me check to resolve sessionStatus out of
+// "checking" before deciding where to send the user — see store/auth.ts.
 export default function RootPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const token = useAuthStore((s) => s.token);
-
-  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
-  useEffect(() => {
-    if (useAuthStore.persist.hasHydrated()) {
-      setHydrated(true);
-      return;
-    }
-    return useAuthStore.persist.onFinishHydration(() => setHydrated(true));
-  }, []);
+  const sessionStatus = useAuthStore((s) => s.sessionStatus);
 
   useEffect(() => {
-    if (!hydrated) return;
-    const isAuthed = !!token && !!user && user.role === "SALESPERSON";
+    if (sessionStatus === "checking") return;
+    const isAuthed = sessionStatus === "authenticated" && !!user && user.role === "SALESPERSON";
     router.replace(isAuthed ? "/home" : "/login");
-  }, [hydrated, token, user, router]);
+  }, [sessionStatus, user, router]);
 
-  return null;
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+    </div>
+  );
 }

@@ -3,9 +3,10 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
-import { computeLine, computeDocumentTotals } from "../services/pricing";
+import { computeLine, computeDocumentTotals, resolvePricingForItems } from "../services/pricing";
 import { docNumber } from "../utils/geo";
 import { notifyAdmins } from "../services/notifications";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth);
@@ -52,17 +53,16 @@ const createSchema = z.object({
   notes: z.string().optional(),
 });
 
-async function buildLines(items: z.infer<typeof itemSchema>[]) {
-  const products = await prisma.product.findMany({ where: { id: { in: items.map((i) => i.productId) } } });
-  const productMap = new Map(products.map((p) => [p.id, p]));
+async function buildLines(items: z.infer<typeof itemSchema>[], customerId: string) {
+  const { resolve } = await resolvePricingForItems(items.map((i) => i.productId), customerId);
   return items.map((i) => {
-    const product = productMap.get(i.productId);
-    if (!product) throw Object.assign(new Error(`Product ${i.productId} not found`), { status: 400 });
+    const hit = resolve(i.productId);
+    if (!hit) throw Object.assign(new Error(`Product ${i.productId} not found`), { status: 400 });
     const computed = computeLine({
       quantity: i.quantity,
-      unitPrice: product.price,
-      discountPercent: i.discountPercent ?? product.discountPercent,
-      taxPercent: product.taxPercent,
+      unitPrice: hit.resolved.unitPrice,
+      discountPercent: i.discountPercent ?? hit.resolved.discountPercent,
+      taxPercent: hit.resolved.taxPercent,
     });
     return { ...computed, productId: i.productId };
   });
@@ -73,7 +73,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const data = createSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
-    const lines = await buildLines(data.items);
+    const lines = await buildLines(data.items, data.customerId);
     const totals = computeDocumentTotals(lines);
 
     const quotation = await prisma.quotation.create({
@@ -114,7 +114,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const quotation = await prisma.quotation.findUnique({
       where: { id: req.params.id },
-      include: { items: true, customer: true, salesperson: { include: { user: true } } },
+      include: { items: true, customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
     if (!quotation) return res.status(404).json({ error: "Quotation not found" });
     if (quotation.convertedOrderId) return res.status(409).json({ error: "Already converted" });

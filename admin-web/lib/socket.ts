@@ -2,17 +2,19 @@ import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
+// Auth is cookie-based now (see API_CONTRACT.md "Real-time (Socket.IO)") - the server
+// parses the httpOnly `sf_token` cookie directly off the handshake's raw Cookie header,
+// so the client just needs `withCredentials: true` (same flag as the axios instance) and
+// nothing else. There is no `auth: { token }` handshake option to pass anymore.
 export function getSocket(): Socket | null {
   if (typeof window === "undefined") return null;
-  const token = localStorage.getItem("sf_token");
-  if (!token) return null;
   if (socket && socket.connected) return socket;
   if (socket) {
     socket.disconnect();
     socket = null;
   }
   socket = io(process.env.NEXT_PUBLIC_API_URL, {
-    auth: { token },
+    withCredentials: true,
     transports: ["websocket", "polling"],
   });
   return socket;

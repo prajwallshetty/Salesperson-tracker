@@ -6,11 +6,14 @@ import { useAuthStore } from "@/store/auth";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const hydrate = useAuthStore((s) => s.hydrate);
+  const checkSession = useAuthStore((s) => s.checkSession);
 
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    // The only reliable "am I logged in" signal now that auth is an httpOnly cookie -
+    // see store/auth.ts. Runs once per app load; the dashboard layout blocks on
+    // `status` until this resolves.
+    checkSession();
+  }, [checkSession]);
 
   return (
     <TooltipProvider delayDuration={150}>

@@ -245,12 +245,16 @@ export interface LiveSalesperson {
   lastLat: number | null;
   lastLng: number | null;
   lastSpeed: number | null;
+  lastHeading?: number | null;
+  lastAccuracy?: number | null;
   lastSeenAt: string | null;
   todayDistanceKm: number;
   todayVisits: number;
   todaySales: number;
   todayCollections: number;
+  currentCustomerId?: string | null;
   currentCustomer: string | null;
+  currentVisitId?: string | null;
   currentVisitStatus: string;
 }
 
@@ -321,6 +325,109 @@ export interface PerformanceDetail {
   totalDistanceKm: number;
   workingHours: number;
   avgOrderValue: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  productCount: number;
+}
+
+export interface PriceListEntry {
+  id: string;
+  productId: string;
+  territoryId: string | null;
+  customerId: string | null;
+  price: number;
+  discountPercent: number;
+  taxPercent: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  product?: Product | null;
+  territory?: Territory | null;
+  customer?: Customer | null;
+}
+
+export type TargetPeriod = "DAILY" | "WEEKLY" | "MONTHLY";
+
+export interface AdminTargetRow {
+  id: string;
+  salespersonId: string;
+  salespersonName: string;
+  territory: string | null;
+  period: TargetPeriod;
+  periodStart: string;
+  periodEnd: string;
+  targetAmount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AttendanceStatus = "PRESENT" | "INCOMPLETE" | "ABSENT";
+
+export interface AttendanceRow {
+  id: string;
+  salespersonId: string;
+  salespersonName: string;
+  avatarUrl: string | null;
+  date: string;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  checkInLat: number | null;
+  checkInLng: number | null;
+  checkOutLat: number | null;
+  checkOutLng: number | null;
+  totalDistanceKm: number | null;
+  totalDurationMin: number | null;
+  status: AttendanceStatus;
+}
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: Role;
+  avatarUrl: string | null;
+  isActive: boolean;
+  createdAt: string;
+  salesperson: { id: string; employeeCode: string; status: string; territory: Territory | null } | null;
+}
+
+export interface TerritoryPerformanceRow {
+  salespersonId: string;
+  name: string;
+  avatarUrl: string | null;
+  sales: number;
+  orders: number;
+  visits: number;
+  collections: number;
+  targetAmount: number;
+  achievementPercent: number;
+}
+
+export interface TerritoryPerformance {
+  territoryId: string;
+  territoryName: string;
+  salespersonCount: number;
+  customerCount: number;
+  period: { gte: string; lte: string };
+  totals: {
+    sales: number;
+    orders: number;
+    visits: number;
+    collections: number;
+    targetAmount: number;
+    achievementPercent: number;
+  };
+  salespersons: TerritoryPerformanceRow[];
 }
 
 export interface Notification {

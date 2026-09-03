@@ -1,18 +1,20 @@
 import { io, Socket } from "socket.io-client";
-import { getToken } from "./api";
 
 let socket: Socket | null = null;
 
 export function connectSocket(): Socket {
   if (socket && socket.connected) return socket;
-  const token = getToken();
   if (socket) {
     socket.disconnect();
     socket = null;
   }
+  // Cookie-based auth (see API_CONTRACT.md "Real-time (Socket.IO)"): the server parses the
+  // `sf_token` cookie directly off the raw Cookie header on the handshake. `withCredentials: true`
+  // is what makes the browser attach that cookie to the (cross-origin, :5174 -> :4000) handshake —
+  // there is no `auth: { token }` option to pass anymore.
   socket = io(process.env.NEXT_PUBLIC_API_URL, {
     path: "/socket.io",
-    auth: { token },
+    withCredentials: true,
     transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionDelay: 1000,

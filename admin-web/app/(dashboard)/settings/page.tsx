@@ -28,8 +28,8 @@ export default function SettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.replace("/login");
   };
 

@@ -33,7 +33,11 @@ export function OfflineBanner() {
       {!online && (
         <>
           <WifiOff className="h-3.5 w-3.5" />
-          <span>You&apos;re offline. Location pings are being saved and will sync automatically.</span>
+          <span>
+            {pendingCount > 0
+              ? `You're offline. ${pendingCount} location${pendingCount === 1 ? "" : "s"} waiting to sync.`
+              : "You're offline. Location pings are being saved and will sync automatically."}
+          </span>
         </>
       )}
       {online && pendingCount > 0 && (

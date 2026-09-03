@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
 import { notifyAdmins } from "../services/notifications";
+import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
 router.use(requireAuth);
@@ -45,7 +46,7 @@ router.post(
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
     const collection = await prisma.collection.create({
       data: { ...data, salespersonId },
-      include: { customer: true, salesperson: { include: { user: true } } },
+      include: { customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
 
     if (data.orderId) {
