@@ -74,3 +74,17 @@ body {
 ::-webkit-scrollbar-track {
   @apply bg-transparent;
 }
+
+/* Respect the OS-level "reduce motion" setting for our own decorative CSS animation.
+   Framer Motion animations are separately disabled via <MotionConfig reducedMotion="user">
+   in app/providers.tsx. The GPS tracking indicator's solid dot (TrackingBanner) stays visible
+   without the expanding pulse ring — the ring is a decorative flourish, not the sole signal
+   that tracking is active, so removing it here doesn't hide any state. Functional spinners
+   (animate-spin, used only while an async action is in flight) are left untouched since they
+   are the only visual indicator of in-progress work, not ambient/decorative motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulseRing {
+    animation: none;
+    opacity: 0;
+  }
+}

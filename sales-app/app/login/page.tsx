@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { slideUp } from "@/lib/animations";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -74,9 +75,9 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute -bottom-28 -right-10 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
 
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
+        variants={slideUp}
+        initial="hidden"
+        animate="show"
         className="relative mx-auto w-full max-w-sm"
       >
         <div className="mb-8 text-center">

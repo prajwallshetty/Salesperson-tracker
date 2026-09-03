@@ -24,6 +24,7 @@ import { StatCard } from "@/components/StatCard";
 import { Skeleton } from "@/components/Skeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { fadeIn } from "@/lib/animations";
 import type { PerformanceSummary, Salesperson } from "@/types";
 
 interface DailyTarget {
@@ -147,7 +148,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="px-4 pb-6 pt-5">
+    <motion.div variants={fadeIn} initial="hidden" animate="show" className="px-4 pb-6 pt-5">
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">
@@ -241,8 +242,9 @@ export default function HomePage() {
         <Skeleton className="mb-5 h-40 w-full" />
       ) : target ? (
         <motion.div
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
+          variants={fadeIn}
+          initial="hidden"
+          animate="show"
           className="mb-5 flex items-center gap-5 rounded-2xl border border-border/60 bg-card p-5 shadow-card"
         >
           <ProgressRing percent={percent} label={`${percent}%`} sublabel={target.label} />
@@ -286,6 +288,6 @@ export default function HomePage() {
         onConfirm={handleEndConfirmed}
         onCancel={() => setConfirmEnd(false)}
       />
-    </div>
+    </motion.div>
   );
 }
