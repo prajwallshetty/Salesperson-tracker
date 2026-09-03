@@ -59,8 +59,21 @@ function greeting() {
 
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
-  const { status, tracking, fieldWorkStartAt, todayDistanceKm, starting, ending, geoErrorMessage, startFieldWork, endFieldWork } =
-    useFieldWorkStore();
+  // Selector-based subscriptions only — the fieldwork store's `lastPoint` field changes on
+  // every single GPS tick while tracking is active. Destructuring the whole store here (the
+  // previous `useFieldWorkStore()` call with no selector) re-subscribed this entire page —
+  // stat grid, target ring, Framer Motion entrance — to every field change, so it re-rendered
+  // on every GPS fix even though it never reads `lastPoint`. Each selector below only
+  // re-renders this component when that specific slice changes.
+  const status = useFieldWorkStore((s) => s.status);
+  const tracking = useFieldWorkStore((s) => s.tracking);
+  const fieldWorkStartAt = useFieldWorkStore((s) => s.fieldWorkStartAt);
+  const todayDistanceKm = useFieldWorkStore((s) => s.todayDistanceKm);
+  const starting = useFieldWorkStore((s) => s.starting);
+  const ending = useFieldWorkStore((s) => s.ending);
+  const geoErrorMessage = useFieldWorkStore((s) => s.geoErrorMessage);
+  const startFieldWork = useFieldWorkStore((s) => s.startFieldWork);
+  const endFieldWork = useFieldWorkStore((s) => s.endFieldWork);
 
   const [summary, setSummary] = useState<PerformanceSummary | null>(null);
   const [selfSp, setSelfSp] = useState<Salesperson | null>(null);
