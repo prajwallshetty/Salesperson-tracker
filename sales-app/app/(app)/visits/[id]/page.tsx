@@ -3,11 +3,32 @@
 import { ChangeEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { Camera, Check, Clock, MapPin, CalendarIcon } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/Skeleton";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { GeoError, friendlyGeoErrorMessage, getCurrentPosition } from "@/lib/geolocation";
-import { CameraIcon, CheckIcon, ClockIcon, MapPinIcon } from "@/components/icons";
+import { cn } from "@/lib/utils";
 import type { Visit, VisitOutcome } from "@/types";
 
 const OUTCOME_OPTIONS: { value: VisitOutcome; label: string }[] = [
@@ -53,7 +74,7 @@ export default function VisitDetailPage() {
 
   const [notes, setNotes] = useState("");
   const [outcome, setOutcome] = useState<VisitOutcome | "">("");
-  const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpDate, setFollowUpDate] = useState<Date | undefined>(undefined);
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
 
   const elapsed = useElapsed(visit?.checkInAt);
@@ -125,9 +146,10 @@ export default function VisitDetailPage() {
         lng: point.lng,
         notes: notes || undefined,
         outcome: outcome || undefined,
-        followUpDate: followUpDate || undefined,
+        followUpDate: followUpDate ? format(followUpDate, "yyyy-MM-dd") : undefined,
       });
       setVisit(res.data);
+      setShowCheckoutForm(false);
       toast.success("Visit completed");
       setTimeout(() => router.push("/customers"), 900);
     } catch (err) {
@@ -144,8 +166,8 @@ export default function VisitDetailPage() {
 
   if (loading) {
     return (
-      <div className="px-4 pt-4 space-y-3">
-        <Skeleton className="h-24 w-full" />
+      <div className="space-y-3 px-4 pt-4">
+        <Skeleton className="h-32 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
     );
@@ -155,7 +177,7 @@ export default function VisitDetailPage() {
     return (
       <div>
         <PageHeader title="Visit" back />
-        <p className="p-6 text-center text-sm text-slate-500">Visit not found.</p>
+        <p className="p-6 text-center text-sm text-muted-foreground">Visit not found.</p>
       </div>
     );
   }
@@ -166,62 +188,53 @@ export default function VisitDetailPage() {
   return (
     <div>
       <PageHeader title={visit.customer?.name ?? "Visit"} back subtitle={visit.customer?.address ?? undefined} />
-      <div className="space-y-4 px-4 pt-4 pb-8">
+      <div className="space-y-5 px-4 pt-4 pb-8">
         {geoError && (
-          <div className="rounded-xl bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
-            {geoError}
-          </div>
+          <div className="rounded-xl bg-warning-soft px-4 py-3 text-xs font-medium text-warning">{geoError}</div>
         )}
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center">
+        <div className="rounded-2xl border border-border/60 bg-card p-6 text-center shadow-card">
           {isCompleted ? (
             <>
-              <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                <CheckIcon className="h-6 w-6" />
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-success-soft text-success">
+                <Check className="h-7 w-7" strokeWidth={2.5} />
               </div>
-              <p className="text-base font-extrabold text-slate-900">Visit Completed</p>
-              {visit.outcome && <p className="mt-1 text-sm text-slate-500">{visit.outcome.replace(/_/g, " ")}</p>}
+              <p className="text-base font-extrabold text-foreground">Visit Completed</p>
+              {visit.outcome && <p className="mt-1 text-sm text-muted-foreground">{visit.outcome.replace(/_/g, " ")}</p>}
             </>
           ) : isCheckedIn ? (
             <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Checked in</p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-3xl font-extrabold tabular-nums text-brand-700">
-                <ClockIcon className="h-6 w-6" />
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Checked in</p>
+              <p className="mt-2 flex items-center justify-center gap-2 text-4xl font-extrabold tabular-nums tracking-tight text-primary">
+                <Clock className="h-7 w-7" />
                 {elapsed}
               </p>
-              <p className="mt-1 text-xs text-slate-400">Duration on site</p>
+              <p className="mt-1 text-xs text-muted-foreground">Duration on site</p>
             </>
           ) : (
             <>
-              <p className="mb-3 text-sm text-slate-500">Ready to visit this customer?</p>
-              <button
-                onClick={handleCheckIn}
-                disabled={checkingIn}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-4 text-base font-extrabold text-white shadow-md active:scale-[0.98] disabled:opacity-60"
-              >
-                <MapPinIcon className="h-5 w-5" />
+              <p className="mb-4 text-sm text-muted-foreground">Ready to visit this customer?</p>
+              <Button onClick={handleCheckIn} loading={checkingIn} size="lg" className="h-14 w-full text-base shadow-md">
+                <MapPin className="h-5 w-5" />
                 {checkingIn ? "Checking in…" : "Check In"}
-              </button>
+              </Button>
             </>
           )}
         </div>
 
-        {isCheckedIn && !showCheckoutForm && (
-          <button
-            onClick={() => setShowCheckoutForm(true)}
-            className="w-full rounded-2xl bg-slate-900 py-4 text-base font-extrabold text-white active:scale-[0.98]"
-          >
+        {isCheckedIn && (
+          <Button onClick={() => setShowCheckoutForm(true)} size="lg" variant="secondary" className="h-14 w-full text-base bg-foreground text-background hover:bg-foreground/90">
             Check Out
-          </button>
+          </Button>
         )}
 
         {(isCheckedIn || isCompleted) && (
           <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-700">Photos</h2>
+            <div className="mb-2.5 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-foreground">Photos</h2>
               {!isCompleted && (
-                <label className="flex cursor-pointer items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700">
-                  <CameraIcon className="h-4 w-4" />
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3.5 py-2 text-xs font-bold text-primary active:bg-primary-soft/70">
+                  <Camera className="h-4 w-4" />
                   {uploadingPhotos ? "Uploading…" : "Add Photo"}
                   <input
                     type="file"
@@ -236,11 +249,17 @@ export default function VisitDetailPage() {
               )}
             </div>
             {!visit.photoUrls || visit.photoUrls.length === 0 ? (
-              <p className="text-xs text-slate-400">No photos attached yet.</p>
+              <p className="text-xs text-muted-foreground">No photos attached yet.</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {visit.photoUrls.map((url) => (
-                  <a key={url} href={resolvePhotoUrl(url)} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-xl bg-slate-100">
+                  <a
+                    key={url}
+                    href={resolvePhotoUrl(url)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="aspect-square overflow-hidden rounded-xl bg-muted"
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={resolvePhotoUrl(url)} alt="Visit" className="h-full w-full object-cover" />
                   </a>
@@ -249,62 +268,69 @@ export default function VisitDetailPage() {
             )}
           </section>
         )}
+      </div>
 
-        {isCheckedIn && showCheckoutForm && (
-          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-bold text-slate-700">Complete Visit</h2>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-500">Outcome</label>
-              <select
-                value={outcome}
-                onChange={(e) => setOutcome(e.target.value as VisitOutcome)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-brand-500"
-              >
-                <option value="">Select outcome…</option>
-                {OUTCOME_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+      <Drawer open={isCheckedIn && showCheckoutForm} onOpenChange={setShowCheckoutForm}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Complete Visit</DrawerTitle>
+          </DrawerHeader>
+          <div className="space-y-4 overflow-y-auto px-5 pb-2">
+            <div className="space-y-1.5">
+              <Label>Outcome</Label>
+              <Select value={outcome} onValueChange={(v) => setOutcome(v as VisitOutcome)}>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Select outcome…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {OUTCOME_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-500">Notes</label>
-              <textarea
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 placeholder="What happened during this visit?"
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-brand-500"
               />
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-500">Follow-up Date (optional)</label>
-              <input
-                type="date"
-                value={followUpDate}
-                onChange={(e) => setFollowUpDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-brand-500"
-              />
+            <div className="space-y-1.5">
+              <Label>Follow-up Date (optional)</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex h-12 w-full items-center gap-2.5 rounded-xl border border-input bg-card px-3.5 text-sm shadow-sm",
+                      !followUpDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                    {followUpDate ? format(followUpDate, "d MMM yyyy") : "Pick a date"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={followUpDate} onSelect={setFollowUpDate} disabled={{ before: new Date() }} />
+                </PopoverContent>
+              </Popover>
             </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => setShowCheckoutForm(false)}
-                className="flex-1 rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCheckOut}
-                disabled={checkingOut}
-                className="flex-[2] rounded-xl bg-brand-600 py-3 text-sm font-extrabold text-white disabled:opacity-60"
-              >
-                {checkingOut ? "Submitting…" : "Submit & Check Out"}
-              </button>
-            </div>
-          </section>
-        )}
-      </div>
+          </div>
+          <DrawerFooter className="flex-row">
+            <Button variant="outline" size="lg" className="flex-1" onClick={() => setShowCheckoutForm(false)}>
+              Cancel
+            </Button>
+            <Button size="lg" className="flex-[2]" onClick={handleCheckOut} loading={checkingOut}>
+              {checkingOut ? "Submitting…" : "Submit & Check Out"}
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

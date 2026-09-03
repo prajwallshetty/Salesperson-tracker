@@ -3,20 +3,22 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { ArrowRightLeft } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/Skeleton";
 import { TotalsSummary } from "@/components/ProductPicker";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import type { Quotation, QuotationStatus } from "@/types";
-import { format } from "date-fns";
-import clsx from "clsx";
 
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  SENT: "bg-blue-100 text-blue-700",
-  ACCEPTED: "bg-emerald-100 text-emerald-700",
-  REJECTED: "bg-red-100 text-red-700",
+const STATUS_VARIANT: Record<QuotationStatus, "muted" | "info" | "success" | "danger"> = {
+  DRAFT: "muted",
+  SENT: "info",
+  ACCEPTED: "success",
+  REJECTED: "danger",
 };
 
 export default function QuotationDetailPage() {
@@ -69,7 +71,7 @@ export default function QuotationDetailPage() {
 
   if (loading) {
     return (
-      <div className="px-4 pt-4 space-y-3">
+      <div className="space-y-3 px-4 pt-4">
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -80,7 +82,7 @@ export default function QuotationDetailPage() {
     return (
       <div>
         <PageHeader title="Quotation" back />
-        <p className="p-6 text-center text-sm text-slate-500">Quotation not found.</p>
+        <p className="p-6 text-center text-sm text-muted-foreground">Quotation not found.</p>
       </div>
     );
   }
@@ -88,26 +90,24 @@ export default function QuotationDetailPage() {
   return (
     <div>
       <PageHeader title={quotation.number} back subtitle={quotation.customer?.name} />
-      <div className="space-y-4 px-4 pb-8 pt-4">
+      <div className="space-y-5 px-4 pb-8 pt-4">
         <div className="flex items-center justify-between">
-          <span className={clsx("rounded-full px-3 py-1 text-xs font-bold", STATUS_COLORS[quotation.status])}>
-            {quotation.status}
-          </span>
-          <span className="text-xs text-slate-400">{format(new Date(quotation.createdAt), "d MMM yyyy, h:mm a")}</span>
+          <Badge variant={STATUS_VARIANT[quotation.status]}>{quotation.status}</Badge>
+          <span className="text-xs text-muted-foreground">{format(new Date(quotation.createdAt), "d MMM yyyy, h:mm a")}</span>
         </div>
 
         <section>
-          <h2 className="mb-2 text-sm font-bold text-slate-700">Items</h2>
+          <h2 className="mb-2 text-sm font-bold text-foreground">Items</h2>
           <ul className="space-y-2">
             {quotation.items.map((it) => (
-              <li key={it.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
+              <li key={it.id} className="flex items-center justify-between rounded-xl border border-border/60 bg-card p-3 shadow-card">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-slate-800">{it.product?.name}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="truncate text-sm font-bold text-foreground">{it.product?.name}</p>
+                  <p className="text-xs text-muted-foreground">
                     {it.quantity} × {formatCurrency(it.unitPrice)}
                   </p>
                 </div>
-                <span className="text-sm font-bold text-slate-800">{formatCurrency(it.lineTotal)}</span>
+                <span className="text-sm font-bold text-foreground">{formatCurrency(it.lineTotal)}</span>
               </li>
             ))}
           </ul>
@@ -117,37 +117,33 @@ export default function QuotationDetailPage() {
 
         {quotation.notes && (
           <div>
-            <h2 className="mb-1 text-sm font-bold text-slate-700">Notes</h2>
-            <p className="text-sm text-slate-500">{quotation.notes}</p>
+            <h2 className="mb-1 text-sm font-bold text-foreground">Notes</h2>
+            <p className="text-sm text-muted-foreground">{quotation.notes}</p>
           </div>
         )}
 
         {quotation.status === "DRAFT" && (
-          <button
+          <Button
             onClick={() => updateStatus("SENT")}
-            disabled={updatingStatus}
-            className="w-full rounded-2xl border border-brand-200 bg-brand-50 py-3.5 text-sm font-extrabold text-brand-700 disabled:opacity-60"
+            loading={updatingStatus}
+            size="lg"
+            variant="outline"
+            className="h-[3.25rem] w-full border-primary/30 bg-primary-soft text-primary hover:bg-primary-soft/70"
           >
             Mark as Sent
-          </button>
+          </Button>
         )}
 
         {!quotation.convertedOrderId && quotation.status !== "REJECTED" && (
-          <button
-            onClick={convert}
-            disabled={converting}
-            className="w-full rounded-2xl bg-emerald-600 py-4 text-base font-extrabold text-white shadow-md active:scale-[0.98] disabled:opacity-60"
-          >
+          <Button onClick={convert} loading={converting} size="lg" variant="success" className="h-14 w-full text-base shadow-md">
+            <ArrowRightLeft className="h-5 w-5" />
             {converting ? "Converting…" : "Convert to Order"}
-          </button>
+          </Button>
         )}
         {quotation.convertedOrderId && (
-          <button
-            onClick={() => router.push(`/orders/${quotation.convertedOrderId}`)}
-            className="w-full rounded-2xl border border-slate-300 py-3.5 text-sm font-bold text-slate-700"
-          >
+          <Button variant="outline" size="lg" className="h-[3.25rem] w-full" onClick={() => router.push(`/orders/${quotation.convertedOrderId}`)}>
             View Converted Order
-          </button>
+          </Button>
         )}
       </div>
     </div>

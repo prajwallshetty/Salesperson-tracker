@@ -103,7 +103,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@salesforcepro.com"
-                className="h-13 py-3.5 pl-10 text-base"
+                className="h-[3.25rem] py-3.5 pl-10 text-base"
               />
             </div>
           </div>
@@ -118,7 +118,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="h-13 py-3.5 pl-10 pr-11 text-base"
+                className="h-[3.25rem] py-3.5 pl-10 pr-11 text-base"
               />
               <button
                 type="button"

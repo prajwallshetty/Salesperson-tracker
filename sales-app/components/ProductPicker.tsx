@@ -2,10 +2,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Minus, Plus, Search, Trash2 } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { computeDocumentTotals, computeLine } from "@/lib/pricing";
 import { formatCurrency } from "@/lib/format";
-import { PlusIcon, SearchIcon, TrashIcon } from "@/components/icons";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import type { Customer, LineItemInput, Product } from "@/types";
 
 export interface CartLine {
@@ -14,8 +29,8 @@ export interface CartLine {
   discountPercent: number;
 }
 
-export function useCart() {
-  const [cart, setCart] = useState<CartLine[]>([]);
+export function useCart(initial: CartLine[] = []) {
+  const [cart, setCart] = useState<CartLine[]>(initial);
 
   function addProduct(product: Product) {
     setCart((prev) => {
@@ -82,21 +97,24 @@ export function CustomerSelect({
   }, []);
 
   return (
-    <div>
-      <label className="mb-1.5 block text-xs font-semibold text-slate-500">Customer</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value, customers.find((c) => c.id === e.target.value))}
+    <div className="space-y-1.5">
+      <Label>Customer</Label>
+      <Select
+        value={value || undefined}
+        onValueChange={(id) => onChange(id, customers.find((c) => c.id === id))}
         disabled={loading}
-        className="w-full rounded-xl border border-slate-300 px-3.5 py-3.5 text-sm outline-none focus:border-brand-500 disabled:opacity-60"
       >
-        <option value="">{loading ? "Loading customers…" : "Select a customer…"}</option>
-        {customers.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger className="h-12">
+          <SelectValue placeholder={loading ? "Loading customers…" : "Select a customer…"} />
+        </SelectTrigger>
+        <SelectContent>
+          {customers.map((c) => (
+            <SelectItem key={c.id} value={c.id}>
+              {c.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -119,26 +137,28 @@ export function ProductPickerModal({ onClose, onPick }: { onClose: () => void; o
   }, [search]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full max-w-sm flex-col rounded-t-3xl bg-white p-5 sm:rounded-3xl"
-      >
-        <h2 className="mb-3 text-lg font-bold text-slate-900">Add Product</h2>
-        <div className="relative mb-3">
-          <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products…"
-            className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-500"
-          />
+    <Drawer open onOpenChange={(o) => !o && onClose()}>
+      <DrawerContent className="max-h-[88vh]">
+        <DrawerHeader className="pb-3">
+          <DrawerTitle>Add Product</DrawerTitle>
+        </DrawerHeader>
+        <div className="px-5 pb-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search products…"
+              className="h-11 pl-9"
+            />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-5 pb-5">
           {loading ? (
-            <p className="py-8 text-center text-sm text-slate-400">Loading…</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
           ) : products.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">No products found</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">No products found</p>
           ) : (
             <ul className="space-y-2">
               {products.map((p) => (
@@ -148,26 +168,25 @@ export function ProductPickerModal({ onClose, onPick }: { onClose: () => void; o
                       onPick(p);
                       onClose();
                     }}
-                    className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left active:bg-slate-50"
+                    className="flex w-full items-center justify-between rounded-xl border border-border/60 p-3.5 text-left transition active:bg-muted"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-slate-800">{p.name}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="truncate text-sm font-bold text-foreground">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">
                         {p.sku} · {formatCurrency(p.price)} / {p.unit}
                       </p>
                     </div>
-                    <PlusIcon className="h-5 w-5 shrink-0 text-brand-600" />
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+                      <Plus className="h-4 w-4" />
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <button onClick={onClose} className="mt-3 w-full rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-600">
-          Close
-        </button>
-      </div>
-    </div>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -181,30 +200,32 @@ export function CartLineRow({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 shadow-card">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold text-slate-800">{line.product.name}</p>
-        <p className="text-xs text-slate-400">
+        <p className="truncate text-sm font-bold text-foreground">{line.product.name}</p>
+        <p className="text-xs text-muted-foreground">
           {formatCurrency(line.product.price)} × {line.quantity} · Tax {line.product.taxPercent}%
         </p>
       </div>
       <div className="flex items-center gap-1.5">
         <button
           onClick={() => onQuantityChange(line.quantity - 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-lg font-bold text-slate-600 active:bg-slate-200"
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground transition active:bg-border"
+          aria-label="Decrease quantity"
         >
-          −
+          <Minus className="h-4 w-4" />
         </button>
-        <span className="w-6 text-center text-sm font-bold">{line.quantity}</span>
+        <span className="w-6 text-center text-sm font-bold text-foreground">{line.quantity}</span>
         <button
           onClick={() => onQuantityChange(line.quantity + 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-lg font-bold text-slate-600 active:bg-slate-200"
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground transition active:bg-border"
+          aria-label="Increase quantity"
         >
-          +
+          <Plus className="h-4 w-4" />
         </button>
       </div>
-      <button onClick={onRemove} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 active:bg-red-50">
-        <TrashIcon className="h-4 w-4" />
+      <button onClick={onRemove} className="flex h-9 w-9 items-center justify-center rounded-lg text-danger transition active:bg-danger-soft" aria-label="Remove item">
+        <Trash2 className="h-4 w-4" />
       </button>
     </div>
   );
@@ -212,20 +233,20 @@ export function CartLineRow({
 
 export function TotalsSummary({ totals }: { totals: { subtotal: number; discountTotal: number; taxTotal: number; grandTotal: number } }) {
   return (
-    <div className="space-y-1.5 rounded-xl bg-slate-50 p-4 text-sm">
-      <div className="flex justify-between text-slate-500">
+    <div className="space-y-1.5 rounded-2xl bg-muted/60 p-4 text-sm">
+      <div className="flex justify-between text-muted-foreground">
         <span>Subtotal</span>
         <span>{formatCurrency(totals.subtotal)}</span>
       </div>
-      <div className="flex justify-between text-slate-500">
+      <div className="flex justify-between text-muted-foreground">
         <span>Discount</span>
         <span>−{formatCurrency(totals.discountTotal)}</span>
       </div>
-      <div className="flex justify-between text-slate-500">
+      <div className="flex justify-between text-muted-foreground">
         <span>Tax</span>
         <span>+{formatCurrency(totals.taxTotal)}</span>
       </div>
-      <div className="mt-1.5 flex justify-between border-t border-slate-200 pt-1.5 text-base font-extrabold text-slate-900">
+      <div className="mt-1.5 flex justify-between border-t border-border pt-1.5 text-base font-extrabold text-foreground">
         <span>Total</span>
         <span>{formatCurrency(totals.grandTotal)}</span>
       </div>
