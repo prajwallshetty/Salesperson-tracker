@@ -1,38 +1,40 @@
 import { ReactNode } from "react";
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
+
+const toneClasses: Record<string, string> = {
+  primary: "bg-primary-soft text-primary",
+  success: "bg-success-soft text-success",
+  warning: "bg-warning-soft text-warning",
+  danger: "bg-danger-soft text-danger",
+  info: "bg-info-soft text-info",
+  muted: "bg-muted text-muted-foreground",
+};
 
 export function StatCard({
   icon,
   label,
   value,
   sub,
-  tone = "slate",
+  tone = "muted",
 }: {
   icon?: ReactNode;
   label: string;
   value: string;
   sub?: string;
-  tone?: "slate" | "brand" | "emerald" | "amber" | "red";
+  tone?: "primary" | "success" | "warning" | "danger" | "info" | "muted";
 }) {
-  const toneClasses: Record<string, string> = {
-    slate: "bg-slate-100 text-slate-600",
-    brand: "bg-brand-100 text-brand-700",
-    emerald: "bg-emerald-100 text-emerald-700",
-    amber: "bg-amber-100 text-amber-700",
-    red: "bg-red-100 text-red-700",
-  };
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-card">
       <div className="flex items-center gap-2">
         {icon && (
-          <span className={clsx("flex h-8 w-8 items-center justify-center rounded-lg", toneClasses[tone])}>
+          <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg [&_svg]:h-4 [&_svg]:w-4", toneClasses[tone])}>
             {icon}
           </span>
         )}
-        <span className="text-xs font-semibold text-slate-500">{label}</span>
+        <span className="truncate text-xs font-semibold text-muted-foreground">{label}</span>
       </div>
-      <p className="mt-2 text-xl font-extrabold text-slate-900">{value}</p>
-      {sub && <p className="mt-0.5 text-[11px] text-slate-400">{sub}</p>}
+      <p className="mt-2 text-xl font-extrabold tracking-tight text-foreground">{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }

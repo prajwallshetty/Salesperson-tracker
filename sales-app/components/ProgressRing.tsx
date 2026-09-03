@@ -15,12 +15,12 @@ export function ProgressRing({
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
-  const color = clamped >= 100 ? "#059669" : clamped >= 60 ? "#2842ea" : "#f59e0b";
+  const color = clamped >= 100 ? "hsl(var(--success))" : clamped >= 60 ? "hsl(var(--primary))" : "hsl(var(--warning))";
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} stroke="#eef2f7" strokeWidth={strokeWidth} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={radius} stroke="hsl(var(--muted))" strokeWidth={strokeWidth} fill="none" />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -35,8 +35,8 @@ export function ProgressRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xl font-extrabold text-slate-900">{label}</span>
-        {sublabel && <span className="text-[10px] font-medium text-slate-400">{sublabel}</span>}
+        <span className="text-xl font-extrabold tracking-tight text-foreground">{label}</span>
+        {sublabel && <span className="text-[10px] font-medium text-muted-foreground">{sublabel}</span>}
       </div>
     </div>
   );

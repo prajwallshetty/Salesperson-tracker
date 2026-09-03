@@ -192,12 +192,12 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          <StatCard icon={<UsersIcon className="h-4 w-4" />} tone="brand" label="Visits Today" value={String(summary?.todayVisits ?? 0)} />
-          <StatCard icon={<TargetIcon className="h-4 w-4" />} tone="amber" label="Pending Follow-ups" value={String(summary?.pendingFollowUps ?? 0)} />
-          <StatCard icon={<BoxIcon className="h-4 w-4" />} tone="emerald" label="Orders Today" value={String(summary?.todayOrders ?? 0)} />
-          <StatCard icon={<WalletIcon className="h-4 w-4" />} tone="slate" label="Collections (Month)" value={formatCurrency(summary?.monthlyCollections)} />
-          <StatCard icon={<TrendingUpIcon className="h-4 w-4" />} tone="brand" label="Sales (Month)" value={formatCurrency(summary?.monthlySales)} />
-          <StatCard icon={<MapPinIcon className="h-4 w-4" />} tone="emerald" label="Distance Today" value={formatKm(distanceKm)} />
+          <StatCard icon={<UsersIcon className="h-4 w-4" />} tone="primary" label="Visits Today" value={String(summary?.todayVisits ?? 0)} />
+          <StatCard icon={<TargetIcon className="h-4 w-4" />} tone="warning" label="Pending Follow-ups" value={String(summary?.pendingFollowUps ?? 0)} />
+          <StatCard icon={<BoxIcon className="h-4 w-4" />} tone="success" label="Orders Today" value={String(summary?.todayOrders ?? 0)} />
+          <StatCard icon={<WalletIcon className="h-4 w-4" />} tone="muted" label="Collections (Month)" value={formatCurrency(summary?.monthlyCollections)} />
+          <StatCard icon={<TrendingUpIcon className="h-4 w-4" />} tone="primary" label="Sales (Month)" value={formatCurrency(summary?.monthlySales)} />
+          <StatCard icon={<MapPinIcon className="h-4 w-4" />} tone="success" label="Distance Today" value={formatKm(distanceKm)} />
         </div>
       )}
 

@@ -1,21 +1,7 @@
-import clsx from "clsx";
+import { Avatar as UiAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { assetUrl } from "@/lib/api";
 import { initials } from "@/lib/format";
-
-const PALETTE = [
-  "bg-brand-100 text-brand-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-amber-100 text-amber-700",
-  "bg-rose-100 text-rose-700",
-  "bg-violet-100 text-violet-700",
-  "bg-cyan-100 text-cyan-700",
-];
-
-function colorFor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % PALETTE.length;
-  return PALETTE[Math.abs(hash) % PALETTE.length];
-}
+import { cn } from "@/lib/utils";
 
 interface AvatarProps {
   name: string;
@@ -26,33 +12,33 @@ interface AvatarProps {
 }
 
 const SIZES: Record<string, string> = {
-  xs: "h-6 w-6 text-[10px]",
-  sm: "h-8 w-8 text-xs",
-  md: "h-10 w-10 text-sm",
-  lg: "h-14 w-14 text-lg",
+  xs: "size-6 text-[10px]",
+  sm: "size-8 text-xs",
+  md: "size-9 text-sm",
+  lg: "size-16 text-lg",
+};
+
+const DOT_SIZES: Record<string, string> = {
+  xs: "size-1.5",
+  sm: "size-2",
+  md: "size-2.5",
+  lg: "size-3.5",
 };
 
 export function Avatar({ name, src, size = "md", online, className }: AvatarProps) {
+  const resolved = assetUrl(src);
   return (
-    <div className={clsx("relative inline-flex shrink-0", className)}>
-      {src ? (
-        <img src={assetUrl(src) ?? undefined} alt={name} className={clsx("rounded-full object-cover", SIZES[size])} />
-      ) : (
-        <div
-          className={clsx(
-            "flex items-center justify-center rounded-full font-semibold",
-            SIZES[size],
-            colorFor(name || "?")
-          )}
-        >
-          {initials(name)}
-        </div>
-      )}
+    <div className={cn("relative inline-flex shrink-0", className)}>
+      <UiAvatar className={SIZES[size]}>
+        {resolved && <AvatarImage src={resolved} alt={name} />}
+        <AvatarFallback>{initials(name)}</AvatarFallback>
+      </UiAvatar>
       {online !== undefined && (
         <span
-          className={clsx(
-            "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white",
-            online ? "bg-emerald-500" : "bg-slate-300"
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-card",
+            DOT_SIZES[size],
+            online ? "bg-success" : "bg-muted-foreground/40"
           )}
         />
       )}

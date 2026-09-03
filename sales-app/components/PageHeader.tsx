@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeftIcon } from "./icons";
+import { ChevronLeft } from "lucide-react";
 
 export function PageHeader({
   title,
@@ -17,19 +17,19 @@ export function PageHeader({
 }) {
   const router = useRouter();
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-4 py-3.5 backdrop-blur">
+    <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-border/60 bg-card/95 px-4 py-3.5 backdrop-blur-md">
       {back && (
         <button
           onClick={() => router.back()}
-          className="-ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 active:bg-slate-100"
+          className="-ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors active:bg-muted"
           aria-label="Back"
         >
-          <ChevronLeftIcon className="h-5 w-5" />
+          <ChevronLeft className="h-5 w-5" />
         </button>
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-lg font-bold text-slate-900">{title}</h1>
-        {subtitle && <p className="truncate text-xs text-slate-500">{subtitle}</p>}
+        <h1 className="truncate text-lg font-bold tracking-tight text-foreground">{title}</h1>
+        {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
       </div>
       {right}
     </header>

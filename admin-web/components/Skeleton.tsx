@@ -1,35 +1,31 @@
-import clsx from "clsx";
+import { Skeleton as UiSkeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
+import { TableRow, TableCell } from "@/components/ui/table";
 
-interface SkeletonProps {
-  className?: string;
-}
-
-export function Skeleton({ className }: SkeletonProps) {
-  return (
-    <div className={clsx("relative overflow-hidden rounded-md bg-slate-200/70", className)}>
-      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-    </div>
-  );
+export function Skeleton({ className }: { className?: string }) {
+  return <UiSkeleton className={className} />;
 }
 
 export function SkeletonRow({ cols = 5 }: { cols?: number }) {
   return (
-    <tr>
+    <TableRow className="hover:bg-transparent">
       {Array.from({ length: cols }).map((_, i) => (
-        <td key={i} className="px-4 py-3">
-          <Skeleton className="h-4 w-full" />
-        </td>
+        <TableCell key={i}>
+          <UiSkeleton className="h-4 w-full max-w-[10rem]" />
+        </TableCell>
       ))}
-    </tr>
+    </TableRow>
   );
 }
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-      <Skeleton className="mb-3 h-4 w-24" />
-      <Skeleton className="mb-2 h-7 w-32" />
-      <Skeleton className="h-3 w-20" />
-    </div>
+    <Card>
+      <CardContent className="p-5">
+        <UiSkeleton className="mb-3 h-3.5 w-24" />
+        <UiSkeleton className="mb-2 h-7 w-32" />
+        <UiSkeleton className="h-3 w-20" />
+      </CardContent>
+    </Card>
   );
 }

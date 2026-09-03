@@ -76,14 +76,14 @@ export default function PerformancePage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <StatCard icon={<BoxIcon className="h-4 w-4" />} tone="brand" label="Orders (Month)" value={String(detail.monthlyOrders)} />
-              <StatCard icon={<UsersIcon className="h-4 w-4" />} tone="emerald" label="Visits (Month)" value={String(detail.monthlyVisits)} />
-              <StatCard icon={<TargetIcon className="h-4 w-4" />} tone="amber" label="New Customers" value={String(detail.newCustomers)} />
-              <StatCard icon={<TrendingUpIcon className="h-4 w-4" />} tone="brand" label="Follow-ups Done" value={String(detail.followUpsCompleted)} />
-              <StatCard icon={<WalletIcon className="h-4 w-4" />} tone="slate" label="Collections" value={formatCurrency(detail.monthlyCollections)} />
-              <StatCard icon={<MapPinIcon className="h-4 w-4" />} tone="emerald" label="Distance" value={formatKm(detail.totalDistanceKm)} />
-              <StatCard icon={<ClockIcon className="h-4 w-4" />} tone="slate" label="Working Hours" value={formatDurationMin(detail.workingHours * 60)} />
-              <StatCard icon={<TrendingUpIcon className="h-4 w-4" />} tone="brand" label="Avg Order Value" value={formatCurrency(detail.avgOrderValue)} />
+              <StatCard icon={<BoxIcon className="h-4 w-4" />} tone="primary" label="Orders (Month)" value={String(detail.monthlyOrders)} />
+              <StatCard icon={<UsersIcon className="h-4 w-4" />} tone="success" label="Visits (Month)" value={String(detail.monthlyVisits)} />
+              <StatCard icon={<TargetIcon className="h-4 w-4" />} tone="warning" label="New Customers" value={String(detail.newCustomers)} />
+              <StatCard icon={<TrendingUpIcon className="h-4 w-4" />} tone="primary" label="Follow-ups Done" value={String(detail.followUpsCompleted)} />
+              <StatCard icon={<WalletIcon className="h-4 w-4" />} tone="muted" label="Collections" value={formatCurrency(detail.monthlyCollections)} />
+              <StatCard icon={<MapPinIcon className="h-4 w-4" />} tone="success" label="Distance" value={formatKm(detail.totalDistanceKm)} />
+              <StatCard icon={<ClockIcon className="h-4 w-4" />} tone="muted" label="Working Hours" value={formatDurationMin(detail.workingHours * 60)} />
+              <StatCard icon={<TrendingUpIcon className="h-4 w-4" />} tone="primary" label="Avg Order Value" value={formatCurrency(detail.avgOrderValue)} />
             </div>
           </>
         ) : (

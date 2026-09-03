@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { useAuthStore } from "@/store/auth";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
@@ -12,7 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [hydrate]);
 
   return (
-    <>
+    <TooltipProvider delayDuration={150}>
       <Toaster
         position="top-right"
         richColors
@@ -26,6 +27,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }}
       />
       {children}
-    </>
+    </TooltipProvider>
   );
 }
