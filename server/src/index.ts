@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import path from "path";
 import http from "http";
 import { Server } from "socket.io";
@@ -9,6 +10,8 @@ import authRoutes from "./routes/auth.routes";
 import salespersonsRoutes from "./routes/salespersons.routes";
 import territoriesRoutes from "./routes/territories.routes";
 import productsRoutes from "./routes/products.routes";
+import categoriesRoutes from "./routes/categories.routes";
+import pricingRoutes from "./routes/pricing.routes";
 import customersRoutes from "./routes/customers.routes";
 import visitsRoutes from "./routes/visits.routes";
 import leadsRoutes from "./routes/leads.routes";
@@ -20,6 +23,9 @@ import trackingRoutes from "./routes/tracking.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import performanceRoutes from "./routes/performance.routes";
 import notificationsRoutes from "./routes/notifications.routes";
+import targetsRoutes from "./routes/targets.routes";
+import attendanceRoutes from "./routes/attendance.routes";
+import usersRoutes from "./routes/users.routes";
 
 import { setIO } from "./sockets/io";
 import { registerLocationSocket } from "./sockets/locationSocket";
@@ -42,6 +48,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: "10mb" }));
+app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
@@ -50,6 +57,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/salespersons", salespersonsRoutes);
 app.use("/api/territories", territoriesRoutes);
 app.use("/api/products", productsRoutes);
+app.use("/api/categories", categoriesRoutes);
+app.use("/api/pricing", pricingRoutes);
 app.use("/api/customers", customersRoutes);
 app.use("/api/visits", visitsRoutes);
 app.use("/api/leads", leadsRoutes);
@@ -61,6 +70,9 @@ app.use("/api/tracking", trackingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/performance", performanceRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/targets", targetsRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/users", usersRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.name === "ZodError") {
