@@ -2,13 +2,19 @@
 
 import { ReactNode, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { ChevronRight, LogOut, Target, TrendingUp, Bell, User } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useFieldWorkStore } from "@/store/fieldwork";
 import { PageHeader } from "@/components/PageHeader";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+// Only needed once the salesperson taps "Log Out" — defer the vaul-based sheet's JS
+// until then instead of shipping it with the page's first paint.
+const ConfirmDialog = dynamic(() => import("@/components/ConfirmDialog").then((m) => m.ConfirmDialog), {
+  ssr: false,
+});
 
 function MenuRow({
   icon,

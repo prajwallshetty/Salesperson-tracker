@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
@@ -22,10 +23,16 @@ import { formatCurrency, formatKm } from "@/lib/format";
 import { ProgressRing } from "@/components/ProgressRing";
 import { StatCard } from "@/components/StatCard";
 import { Skeleton } from "@/components/Skeleton";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { fadeIn } from "@/lib/animations";
 import type { PerformanceSummary, Salesperson } from "@/types";
+
+// The confirm sheet (built on the vaul Drawer) is only needed once the salesperson actually
+// taps "End Field Work" — not on first paint — so load it on demand instead of pulling vaul
+// into the home page's initial JS bundle.
+const ConfirmDialog = dynamic(() => import("@/components/ConfirmDialog").then((m) => m.ConfirmDialog), {
+  ssr: false,
+});
 
 interface DailyTarget {
   targetAmount: number;

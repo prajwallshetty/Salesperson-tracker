@@ -37,11 +37,17 @@ export default function FollowUpsPage() {
 
   async function markComplete(id: string) {
     setCompletingId(id);
+    // Optimistic UI: a follow-up completion is a non-financial status flag, not an
+    // order/quotation/collection/visit state — safe to reflect immediately and roll back
+    // on failure rather than making the salesperson wait on a round-trip for this list to
+    // update.
+    const previous = items;
+    setItems((prev) => prev.filter((f) => f.id !== id));
     try {
       await api.patch(`/followups/${id}/complete`);
       toast.success("Follow-up marked complete");
-      setItems((prev) => prev.filter((f) => f.id !== id));
     } catch (err) {
+      setItems(previous);
       toast.error(apiErrorMessage(err, "Could not update follow-up"));
     } finally {
       setCompletingId(null);
