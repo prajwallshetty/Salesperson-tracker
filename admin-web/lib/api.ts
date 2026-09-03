@@ -1,26 +1,26 @@
 import axios from "axios";
 
+// Auth is cookie-based (httpOnly `sf_token` set by the server) — every request must
+// go out `withCredentials` so the browser attaches it. There is no token in JS to
+// read or attach anymore; do not add an Authorization header here.
 export const api = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL}/api`,
-});
-
-api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("sf_token");
-    if (token) {
-      config.headers = config.headers ?? {};
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
+  withCredentials: true,
 });
 
 api.interceptors.response.use(
   (res) => res,
   (error) => {
     if (typeof window !== "undefined" && error?.response?.status === 401) {
-      localStorage.removeItem("sf_token");
-      localStorage.removeItem("sf_auth");
+      // The cookie is invalid/expired/cleared server-side (e.g. an admin deactivated
+      // this account) - drop any cached display info and hard-redirect so no stale
+      // client state or rendered page lingers. Skip the redirect for the /login page
+      // itself, since an unauthenticated GET /auth/me from there is expected to 401.
+      try {
+        localStorage.removeItem("sf_user");
+      } catch {
+        // ignore (private mode / storage disabled)
+      }
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";
       }

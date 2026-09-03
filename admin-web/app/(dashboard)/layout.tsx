@@ -18,10 +18,8 @@ const CommandPalette = dynamic(() => import("@/components/CommandPalette").then(
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const hydrated = useAuthStore((s) => s.hydrated);
+  const status = useAuthStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
-  const token = useAuthStore((s) => s.token);
-  const logout = useAuthStore((s) => s.logout);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -34,17 +32,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   useEffect(() => {
-    if (!hydrated) return;
-    if (!token || !user) {
-      router.replace("/login");
-      return;
-    }
-    if (user.role !== "ADMIN") {
-      logout();
+    // `status` is only trustworthy once the live GET /auth/me check (fired once from
+    // Providers on app mount) has resolved - see store/auth.ts. Redirect only once it
+    // has settled to "unauthenticated"; a cached `user` alone never grants access.
+    if (status === "loading") return;
+    if (status === "unauthenticated" || !user || user.role !== "ADMIN") {
       router.replace("/login");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, token, user]);
+  }, [status, user]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -58,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  if (!hydrated || !token || !user || user.role !== "ADMIN") {
+  if (status !== "authenticated" || !user || user.role !== "ADMIN") {
     return null;
   }
 
