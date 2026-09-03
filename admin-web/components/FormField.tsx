@@ -1,7 +1,8 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { cn } from "@/lib/utils";
 
 const baseInputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-400";
+  "w-full rounded-xl border border-input bg-card px-3.5 py-2 text-sm text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 
 interface FieldWrapProps {
   label: string;
@@ -14,25 +15,25 @@ interface FieldWrapProps {
 export function FieldWrap({ label, required, error, children, hint }: FieldWrapProps) {
   return (
     <label className="mb-4 block">
-      <span className="mb-1.5 block text-sm font-medium text-slate-600">
+      <span className="mb-1.5 block text-sm font-medium text-foreground">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-destructive"> *</span>}
       </span>
       {children}
-      {hint && !error && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
-      {error && <span className="mt-1 block text-xs text-red-500">{error}</span>}
+      {hint && !error && <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>}
+      {error && <span className="mt-1 block text-xs font-medium text-destructive">{error}</span>}
     </label>
   );
 }
 
 export function TextField(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={baseInputClass + " " + (props.className ?? "")} />;
+  return <input {...props} className={cn(baseInputClass, props.className)} />;
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={baseInputClass + " " + (props.className ?? "")} />;
+  return <textarea {...props} className={cn(baseInputClass, "min-h-[90px]", props.className)} />;
 }
 
 export function SelectField(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={baseInputClass + " " + (props.className ?? "")} />;
+  return <select {...props} className={cn(baseInputClass, "pr-8", props.className)} />;
 }
