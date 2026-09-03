@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import clsx from "clsx";
 import { api, apiErrorMessage } from "@/lib/api";
+import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/Skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { IconChart } from "@/components/icons";
 import { PerformanceDetailDrawer } from "@/components/performance/PerformanceDetailDrawer";
+import { cn } from "@/lib/utils";
 import type { PerformanceLeaderboardRow } from "@/types";
 
 const RANGES = [
@@ -17,6 +20,12 @@ const RANGES = [
   { key: "week", label: "This Week" },
   { key: "month", label: "This Month" },
 ];
+
+const RANK_STYLE: Record<number, string> = {
+  1: "bg-warning-soft text-warning",
+  2: "bg-muted text-muted-foreground",
+  3: "bg-secondary text-secondary-foreground",
+};
 
 export default function PerformancePage() {
   const [range, setRange] = useState("month");
@@ -35,89 +44,70 @@ export default function PerformancePage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Performance Leaderboard</h1>
-          <p className="text-sm text-slate-400">Compare salesperson performance across periods.</p>
-        </div>
-        <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.key}
-              onClick={() => setRange(r.key)}
-              className={clsx(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition",
-                range === r.key ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        title="Performance Leaderboard"
+        description="Compare salesperson performance across periods."
+        actions={
+          <Tabs value={range} onValueChange={setRange}>
+            <TabsList>
+              {RANGES.map((r) => (
+                <TabsTrigger key={r.key} value={r.key}>
+                  {r.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        }
+      />
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Rank</th>
-                <th className="px-4 py-3 font-medium">Salesperson</th>
-                <th className="px-4 py-3 font-medium text-right">Sales</th>
-                <th className="px-4 py-3 font-medium text-right">Orders</th>
-                <th className="px-4 py-3 font-medium text-right">Visits</th>
-                <th className="px-4 py-3 font-medium text-right">Collections</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10">
-                    <EmptyState icon={<IconChart className="h-6 w-6" />} title="No performance data" message="Data will appear once field activity is recorded for this period." />
-                  </td>
-                </tr>
-              ) : (
-                items.map((row) => (
-                  <tr
-                    key={row.salespersonId}
-                    onClick={() => setSelected(row)}
-                    className="cursor-pointer transition hover:bg-slate-50"
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Rank</TableHead>
+            <TableHead>Salesperson</TableHead>
+            <TableHead className="text-right">Sales</TableHead>
+            <TableHead className="text-right">Orders</TableHead>
+            <TableHead className="text-right">Visits</TableHead>
+            <TableHead className="text-right">Collections</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
+          ) : items.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="py-10">
+                <EmptyState icon={<IconChart className="size-5" />} title="No performance data" message="Data will appear once field activity is recorded for this period." />
+              </TableCell>
+            </TableRow>
+          ) : (
+            items.map((row) => (
+              <TableRow key={row.salespersonId} onClick={() => setSelected(row)} className="cursor-pointer">
+                <TableCell>
+                  <span
+                    className={cn(
+                      "flex size-7 items-center justify-center rounded-full text-xs font-bold",
+                      RANK_STYLE[row.rank] ?? "bg-muted text-muted-foreground"
+                    )}
                   >
-                    <td className="px-4 py-3">
-                      <span
-                        className={clsx(
-                          "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
-                          row.rank === 1
-                            ? "bg-amber-100 text-amber-700"
-                            : row.rank === 2
-                            ? "bg-slate-200 text-slate-600"
-                            : row.rank === 3
-                            ? "bg-orange-100 text-orange-700"
-                            : "bg-slate-100 text-slate-400"
-                        )}
-                      >
-                        {row.rank}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar name={row.name} src={row.avatarUrl} size="sm" />
-                        <span className="font-medium text-slate-700">{row.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatCurrency(row.sales)}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{formatNumber(row.orders)}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{formatNumber(row.visits)}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{formatCurrency(row.collections)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    {row.rank}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2.5">
+                    <Avatar name={row.name} src={row.avatarUrl} size="sm" />
+                    <span className="font-medium text-foreground">{row.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-semibold text-foreground">{formatCurrency(row.sales)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatNumber(row.orders)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatNumber(row.visits)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatCurrency(row.collections)}</TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       <PerformanceDetailDrawer
         salespersonId={selected?.salespersonId ?? null}

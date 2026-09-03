@@ -15,6 +15,20 @@ interface PerformanceDetailDrawerProps {
   onClose: () => void;
 }
 
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-border/60 bg-popover px-3 py-2 text-xs shadow-popover">
+      <p className="mb-1 font-semibold text-foreground">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} className="text-muted-foreground">
+          {p.name}: <span className="font-medium text-foreground">{formatCurrency(p.value)}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function PerformanceDetailDrawer({ salespersonId, name, onClose }: PerformanceDetailDrawerProps) {
   const [data, setData] = useState<PerformanceDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,15 +53,15 @@ export function PerformanceDetailDrawer({ salespersonId, name, onClose }: Perfor
         </div>
       ) : (
         <div className="space-y-5">
-          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <div className="rounded-2xl border border-border/60 bg-muted/40 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-700">Target vs Achievement</p>
-              <span className="text-sm font-semibold text-brand-600">{data.achievementPercent}%</span>
+              <p className="text-sm font-semibold text-foreground">Target vs Achievement</p>
+              <span className="text-sm font-semibold text-primary">{data.achievementPercent}%</span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.min(100, data.achievementPercent)}%` }} />
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, data.achievementPercent)}%` }} />
             </div>
-            <p className="mt-2 text-xs text-slate-400">
+            <p className="mt-2 text-xs text-muted-foreground">
               {formatCurrency(data.monthlySales)} of {formatCurrency(data.targetAmount)} target
             </p>
           </div>
@@ -61,11 +75,11 @@ export function PerformanceDetailDrawer({ salespersonId, name, onClose }: Perfor
               ]}
               margin={{ left: -18, right: 10, top: 10 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" vertical={false} />
-              <XAxis dataKey="period" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }} />
-              <Bar dataKey="sales" fill="#3d63f5" radius={[6, 6, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(240 18% 90%)" vertical={false} />
+              <XAxis dataKey="period" tick={{ fontSize: 12, fill: "hsl(240 8% 46%)" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "hsl(240 8% 46%)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(262 90% 96%)" }} />
+              <Bar dataKey="sales" name="Sales" fill="hsl(262 83% 58%)" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
 
@@ -87,9 +101,9 @@ export function PerformanceDetailDrawer({ salespersonId, name, onClose }: Perfor
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-white p-3">
-      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-0.5 text-sm font-semibold text-slate-700">{value}</p>
+    <div className="rounded-xl border border-border/60 bg-card p-3">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
