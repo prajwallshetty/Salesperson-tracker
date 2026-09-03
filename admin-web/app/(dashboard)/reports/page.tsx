@@ -32,7 +32,7 @@ export default function ReportsPage() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as ReportTab)}>
         <TabsList>
           {TABS.map((t) => (
-            <TabsTrigger key={t.key} value={t.key}>
+            <TabsTrigger key={t.key} value={t.key} className="gap-1.5">
               <t.icon className="size-4" /> {t.label}
             </TabsTrigger>
           ))}

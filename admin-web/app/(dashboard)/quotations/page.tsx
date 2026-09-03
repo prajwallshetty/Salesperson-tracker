@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { FilterSelect } from "@/components/FilterSelect";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/Skeleton";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -123,18 +124,22 @@ export default function QuotationsListPage() {
                 <TableCell className="text-muted-foreground">{formatDate(q.createdAt)}</TableCell>
                 <TableCell className="text-right font-semibold text-foreground">{formatCurrency(q.grandTotal)}</TableCell>
                 <TableCell>
-                  <Select value={q.status} onValueChange={(v) => updateStatus(q, v)}>
-                    <SelectTrigger className="h-8 w-32 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {STATUSES.includes(q.status) ? (
+                    <Select value={q.status} onValueChange={(v) => updateStatus(q, v)}>
+                      <SelectTrigger className="h-8 w-32 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <StatusBadge status={q.status} />
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   {q.status === "ACCEPTED" && (
