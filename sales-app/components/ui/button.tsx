@@ -48,9 +48,19 @@ export interface ButtonProps
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+    // Radix's Slot requires exactly one React element child so it can clone these props onto
+    // it — passing the `{loading && <Loader2 />}` sibling through unconditionally (even when
+    // falsy) turns `children` into a 2-item array and crashes Slot at runtime. asChild callers
+    // render a link/nav target, not a spinner, so skip the loading node entirely in that case.
+    if (asChild) {
+      return (
+        <Slot className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props}>
+          {children}
+        </Slot>
+      );
+    }
     return (
-      <Comp
+      <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
@@ -58,7 +68,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {loading && <Loader2 className="animate-spin" />}
         {children}
-      </Comp>
+      </button>
     );
   }
 );
