@@ -35,7 +35,7 @@ export function RecentActivities() {
       api.get("/dashboard/visits", { params: { range: "today" } }).catch(() => ({ data: [] })),
       api.get("/dashboard/orders", { params: { range: "today" } }).catch(() => ({ data: [] })),
       api.get("/dashboard/collections", { params: { range: "today" } }).catch(() => ({ data: [] })),
-      api.get("/leads").catch(() => ({ data: [] })),
+      api.get("/leads", { params: { limit: 10 } }).catch(() => ({ data: [] })),
     ])
       .then(([visitsRes, ordersRes, collectionsRes, leadsRes]) => {
         const visits: ActivityItem[] = ((visitsRes.data ?? []) as Visit[])

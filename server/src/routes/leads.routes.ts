@@ -10,16 +10,18 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const { status, salespersonId, search } = req.query as Record<string, string>;
+    const { status, salespersonId, search, limit } = req.query as Record<string, string>;
     const where: any = {};
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (status) where.status = status;
     if (search) where.name = { contains: search, mode: "insensitive" };
+    const take = limit ? Math.min(parseInt(limit, 10) || 0, 200) || undefined : undefined;
     const leads = await prisma.lead.findMany({
       where,
       include: { salesperson: { include: { user: { select: { name: true } } } }, followUps: true },
       orderBy: { createdAt: "desc" },
+      ...(take ? { take } : {}),
     });
     res.json(leads);
   })
