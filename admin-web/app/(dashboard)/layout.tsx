@@ -2,12 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useAuthStore } from "@/store/auth";
 import { Sidebar, useSidebarCollapsed } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { CommandPalette } from "@/components/CommandPalette";
 import { cn } from "@/lib/utils";
+
+// The command palette (cmdk + its search logic) is only ever needed after the
+// user opens it with Ctrl/Cmd+K, so keep it out of every dashboard page's
+// initial bundle and mount it on demand instead.
+const CommandPalette = dynamic(() => import("@/components/CommandPalette").then((m) => m.CommandPalette), {
+  ssr: false,
+});
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -18,6 +25,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Only mount the palette (and trigger its lazy chunk fetch) once it has
+  // actually been opened at least once — never eagerly on page load.
+  const [paletteMounted, setPaletteMounted] = useState(false);
+  const openPalette = () => {
+    setPaletteMounted(true);
+    setPaletteOpen(true);
+  };
 
   useEffect(() => {
     if (!hydrated) return;
@@ -36,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        setPaletteMounted(true);
         setPaletteOpen((o) => !o);
       }
     };
@@ -66,11 +81,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onMenuClick={() => setMobileOpen(true)} onSearchClick={() => setPaletteOpen(true)} />
+        <Topbar onMenuClick={() => setMobileOpen(true)} onSearchClick={openPalette} />
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">{children}</main>
       </div>
 
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      {paletteMounted && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />}
     </div>
   );
 }
