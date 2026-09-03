@@ -15,35 +15,19 @@ export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const user = useAuthStore((s) => s.user);
-  const token = useAuthStore((s) => s.token);
+  const sessionStatus = useAuthStore((s) => s.sessionStatus);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Equivalent of the old router's `isAuthed ? <Navigate to="/home" replace /> : <LoginPage />`.
-  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+  // Cookie-based auth: Providers resolves sessionStatus via GET /api/auth/me on load. Wait for
+  // a real "authenticated" (not the initial "checking") before redirecting away from /login —
+  // see store/auth.ts and app/(app)/layout.tsx for why this can't gate on a cached boolean.
+  const isAuthed = sessionStatus === "authenticated" && !!user && user.role === "SALESPERSON";
   useEffect(() => {
-    if (useAuthStore.persist.hasHydrated()) {
-      setHydrated(true);
-      return;
-    }
-    return useAuthStore.persist.onFinishHydration(() => setHydrated(true));
-  }, []);
-
-  const isAuthed = !!token && !!user && user.role === "SALESPERSON";
-  // See app/(app)/layout.tsx for why this re-checks live store state after a short debounce
-  // instead of redirecting on the first render's `isAuthed` value — persist.hasHydrated() can
-  // report true for one render before the rehydrated token/user actually land in state.
-  useEffect(() => {
-    if (!hydrated || !isAuthed) return;
-    const timer = setTimeout(() => {
-      const state = useAuthStore.getState();
-      const stillAuthed = !!(state.token && state.user && state.user.role === "SALESPERSON");
-      if (stillAuthed) router.replace("/home");
-    }, 75);
-    return () => clearTimeout(timer);
-  }, [hydrated, isAuthed, router]);
+    if (isAuthed) router.replace("/home");
+  }, [isAuthed, router]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,8 +48,12 @@ export default function LoginPage() {
     }
   }
 
-  if (!hydrated || isAuthed) {
-    return null;
+  if (sessionStatus === "checking" || isAuthed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-primary">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+      </div>
+    );
   }
 
   return (

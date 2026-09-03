@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import { Layout } from "@/components/Layout";
@@ -10,43 +10,30 @@ import { Layout } from "@/components/Layout";
 // all routes in the (app) group (Home, Customers, Visits, ...), which is what lets the
 // GPS watch started by Providers (mounted even higher, in app/layout.tsx) survive tab
 // switches untouched.
+//
+// Auth is cookie-based (httpOnly sf_token — see API_CONTRACT.md), so there is no locally-cached
+// token to gate on. `sessionStatus` starts at "checking" on every load and Providers resolves it
+// via `GET /api/auth/me` (cookie sent automatically). We must wait for that real answer instead
+// of redirecting on a cached boolean — redirecting while "checking" would bounce an
+// already-authenticated user through /login on every hard refresh.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const token = useAuthStore((s) => s.token);
+  const sessionStatus = useAuthStore((s) => s.sessionStatus);
 
-  // zustand's persist middleware rehydrates from localStorage asynchronously after mount.
-  // Without waiting for it, a hard refresh on a protected route would see user=null on the
-  // very first render and redirect to /login even for an already-authenticated user.
-  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+  const isAuthed = sessionStatus === "authenticated" && !!user && user.role === "SALESPERSON";
+
   useEffect(() => {
-    if (useAuthStore.persist.hasHydrated()) {
-      setHydrated(true);
-      return;
-    }
-    return useAuthStore.persist.onFinishHydration(() => setHydrated(true));
-  }, []);
+    if (sessionStatus === "checking" || isAuthed) return;
+    router.replace("/login");
+  }, [sessionStatus, isAuthed, router]);
 
-  const isAuthed = !!token && !!user && user.role === "SALESPERSON";
-
-  // zustand's persist.hasHydrated() can briefly report `true` for one render before the
-  // rehydrated `token`/`user` are actually merged into state on a fresh (hard) page load —
-  // a real, reproducible race, not a hypothetical. Redirecting to /login on that transient
-  // false reading would bounce an already-authenticated user through /login -> /home on every
-  // direct navigation or refresh. Debounce the "not authenticated" verdict briefly and
-  // re-check the live store state before committing to the redirect.
-  useEffect(() => {
-    if (!hydrated || isAuthed) return;
-    const timer = setTimeout(() => {
-      const state = useAuthStore.getState();
-      const stillNotAuthed = !(state.token && state.user && state.user.role === "SALESPERSON");
-      if (stillNotAuthed) router.replace("/login");
-    }, 75);
-    return () => clearTimeout(timer);
-  }, [hydrated, isAuthed, router]);
-
-  if (!hydrated || !isAuthed) {
-    return null;
+  if (sessionStatus === "checking" || !isAuthed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+      </div>
+    );
   }
 
   return <Layout>{children}</Layout>;

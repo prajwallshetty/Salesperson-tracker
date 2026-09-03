@@ -1,43 +1,12 @@
 import axios, { AxiosError } from "axios";
 
-export const TOKEN_KEY = "sfp_token";
-
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function setToken(token: string) {
-  try {
-    localStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    /* ignore */
-  }
-}
-
-export function clearToken() {
-  try {
-    localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
+// Auth is cookie-based (httpOnly `sf_token` set by the server) — see API_CONTRACT.md's
+// "Auth transport — httpOnly cookie" section. There is no token for JS to read/store anymore;
+// `withCredentials: true` is what makes the browser attach the cookie to every request.
 export const api = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL}/api`,
   timeout: 20000,
-});
-
-api.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  withCredentials: true,
 });
 
 // Set by the auth store at startup to avoid a circular import between api.ts and store/auth.ts
