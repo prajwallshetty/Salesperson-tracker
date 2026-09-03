@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ArrowLeft, Package, Pencil } from "lucide-react";
 import { api, apiErrorMessage, assetUrl } from "@/lib/api";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/Skeleton";
-import { IconBox, IconEdit } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import type { Product } from "@/types";
 
 // The product catalog is small and has no dedicated single-product GET endpoint, so this
@@ -46,70 +49,70 @@ export default function ProductDetailPage() {
   }
 
   if (notFound || !product) {
-    return <EmptyState icon={<IconBox className="h-6 w-6" />} title="Product not found" />;
+    return <EmptyState icon={<Package className="size-5" />} title="Product not found" />;
   }
 
   return (
     <div className="space-y-5">
-      <button onClick={() => router.push("/products")} className="text-sm text-slate-400 hover:text-slate-600">
-        &larr; Back to Products
+      <button onClick={() => router.push("/products")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> Back to Products
       </button>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="flex items-center gap-4">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-400">
-            {product.imageUrl ? (
-              <img src={assetUrl(product.imageUrl) ?? undefined} alt={product.name} className="h-full w-full object-cover" />
-            ) : (
-              <IconBox className="h-8 w-8" />
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold text-slate-800">{product.name}</h1>
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
-                  product.isActive
-                    ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
-                    : "bg-slate-100 text-slate-500 ring-slate-500/20"
-                }`}
-              >
-                {product.isActive ? "Active" : "Inactive"}
-              </span>
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+          <div className="flex items-center gap-4">
+            <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground">
+              {product.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={assetUrl(product.imageUrl) ?? undefined} alt={product.name} className="h-full w-full object-cover" />
+              ) : (
+                <Package className="size-8" />
+              )}
             </div>
-            <p className="text-sm text-slate-400">
-              {product.sku} &middot; {product.category} &middot; {product.unit}
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold tracking-tight text-foreground">{product.name}</h1>
+                <Badge variant={product.isActive ? "success" : "muted"} dot>
+                  {product.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {product.sku} &middot; {product.category} &middot; {product.unit}
+              </p>
+            </div>
           </div>
-        </div>
-        <button
-          onClick={() => router.push("/products")}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-        >
-          <IconEdit className="h-4 w-4" /> Edit from list
-        </button>
-      </div>
+          <Button variant="outline" onClick={() => router.push("/products")}>
+            <Pencil /> Edit from list
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-          <p className="mb-2 text-sm font-semibold text-slate-700">Pricing</p>
-          <InfoRow label="Price" value={formatCurrency(product.price)} />
-          <InfoRow label="Tax" value={`${product.taxPercent}%`} />
-          <InfoRow label="Discount" value={`${product.discountPercent}%`} />
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-          <p className="mb-2 text-sm font-semibold text-slate-700">Catalog Info</p>
-          <InfoRow label="SKU" value={product.sku} />
-          <InfoRow label="Category" value={product.category} />
-          <InfoRow label="Unit" value={product.unit} />
-          <InfoRow label="Added" value={formatDateTime(product.createdAt)} />
-          <InfoRow label="Last updated" value={formatDateTime(product.updatedAt)} />
-        </div>
+        <Card>
+          <CardContent className="p-5">
+            <p className="mb-2 text-sm font-semibold text-foreground">Pricing</p>
+            <InfoRow label="Price" value={formatCurrency(product.price)} />
+            <InfoRow label="Tax" value={`${product.taxPercent}%`} />
+            <InfoRow label="Discount" value={`${product.discountPercent}%`} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="mb-2 text-sm font-semibold text-foreground">Catalog Info</p>
+            <InfoRow label="SKU" value={product.sku} />
+            <InfoRow label="Category" value={product.category} />
+            <InfoRow label="Unit" value={product.unit} />
+            <InfoRow label="Added" value={formatDateTime(product.createdAt)} />
+            <InfoRow label="Last updated" value={formatDateTime(product.updatedAt)} />
+          </CardContent>
+        </Card>
         {product.description && (
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card lg:col-span-2">
-            <p className="mb-2 text-sm font-semibold text-slate-700">Description</p>
-            <p className="text-sm text-slate-600">{product.description}</p>
-          </div>
+          <Card className="lg:col-span-2">
+            <CardContent className="p-5">
+              <p className="mb-2 text-sm font-semibold text-foreground">Description</p>
+              <p className="text-sm text-muted-foreground">{product.description}</p>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>
@@ -118,9 +121,9 @@ export default function ProductDetailPage() {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-50 py-2.5 last:border-b-0">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className="text-sm font-medium text-slate-700">{value}</span>
+    <div className="flex items-center justify-between border-b border-border/40 py-2.5 last:border-b-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium text-foreground">{value}</span>
     </div>
   );
 }
