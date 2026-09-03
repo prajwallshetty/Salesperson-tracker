@@ -9,12 +9,14 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const notifications = await prisma.notification.findMany({
-      where: { userId: req.auth!.userId },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
-    const unreadCount = await prisma.notification.count({ where: { userId: req.auth!.userId, isRead: false } });
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: { userId: req.auth!.userId },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
+      prisma.notification.count({ where: { userId: req.auth!.userId, isRead: false } }),
+    ]);
     res.json({ items: notifications, unreadCount });
   })
 );

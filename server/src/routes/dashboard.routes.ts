@@ -173,32 +173,51 @@ router.get(
   "/targets",
   asyncHandler(async (_req, res) => {
     const now = new Date();
+    const defaultRange = { gte: startOfMonth(now), lte: endOfMonth(now) };
     const salespersons = await prisma.salesperson.findMany({
       where: { status: "ACTIVE" },
       include: { user: { select: { name: true, avatarUrl: true } }, targets: { where: { periodStart: { lte: now }, periodEnd: { gte: now } } } },
     });
-    const results = await Promise.all(
-      salespersons.map(async (sp) => {
-        const target = sp.targets.find((t) => t.period === "MONTHLY") ?? sp.targets[0];
-        const achievement = await prisma.order.aggregate({
-          where: {
-            salespersonId: sp.id,
-            createdAt: target ? { gte: target.periodStart, lte: target.periodEnd } : { gte: startOfMonth(now), lte: endOfMonth(now) },
-          },
+
+    // Each salesperson's achievement window is usually the same current-month range, but a
+    // target can define a custom periodStart/periodEnd, so group salespersons by their actual
+    // window and issue one aggregate per distinct window instead of one per salesperson.
+    const spInfo = salespersons.map((sp) => {
+      const target = sp.targets.find((t) => t.period === "MONTHLY") ?? sp.targets[0];
+      const range = target ? { gte: target.periodStart, lte: target.periodEnd } : defaultRange;
+      return { sp, target, range, rangeKey: `${range.gte.getTime()}_${range.lte.getTime()}` };
+    });
+    const rangeGroups = new Map<string, { gte: Date; lte: Date; salespersonIds: string[] }>();
+    for (const info of spInfo) {
+      const group = rangeGroups.get(info.rangeKey);
+      if (group) group.salespersonIds.push(info.sp.id);
+      else rangeGroups.set(info.rangeKey, { gte: info.range.gte, lte: info.range.lte, salespersonIds: [info.sp.id] });
+    }
+
+    const achievedMap = new Map<string, number>();
+    await Promise.all(
+      Array.from(rangeGroups.values()).map(async (group) => {
+        const grouped = await prisma.order.groupBy({
+          by: ["salespersonId"],
+          where: { salespersonId: { in: group.salespersonIds }, createdAt: { gte: group.gte, lte: group.lte } },
           _sum: { grandTotal: true },
         });
-        const achieved = achievement._sum.grandTotal ?? 0;
-        const targetAmount = target?.targetAmount ?? 0;
-        return {
-          salespersonId: sp.id,
-          name: sp.user.name,
-          avatarUrl: sp.user.avatarUrl,
-          targetAmount,
-          achieved,
-          percent: targetAmount > 0 ? Math.round((achieved / targetAmount) * 100) : 0,
-        };
+        for (const row of grouped) achievedMap.set(row.salespersonId, row._sum.grandTotal ?? 0);
       })
     );
+
+    const results = spInfo.map(({ sp, target }) => {
+      const achieved = achievedMap.get(sp.id) ?? 0;
+      const targetAmount = target?.targetAmount ?? 0;
+      return {
+        salespersonId: sp.id,
+        name: sp.user.name,
+        avatarUrl: sp.user.avatarUrl,
+        targetAmount,
+        achieved,
+        percent: targetAmount > 0 ? Math.round((achieved / targetAmount) * 100) : 0,
+      };
+    });
     res.json(results);
   })
 );

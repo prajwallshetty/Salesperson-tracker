@@ -24,46 +24,66 @@ router.get(
     });
 
     const now = new Date();
-    const enriched = await Promise.all(
-      salespersons.map(async (sp) => {
-        const [todayVisits, currentVisit, todayOrders, todayCollections] = await Promise.all([
-          prisma.visit.count({ where: { salespersonId: sp.id, createdAt: { gte: startOfDay(now), lte: endOfDay(now) } } }),
-          prisma.visit.findFirst({
-            where: { salespersonId: sp.id, status: "IN_PROGRESS" },
-            include: { customer: true },
-            orderBy: { checkInAt: "desc" },
-          }),
-          prisma.order.aggregate({
-            where: { salespersonId: sp.id, createdAt: { gte: startOfDay(now), lte: endOfDay(now) } },
-            _sum: { grandTotal: true },
-          }),
-          prisma.collection.aggregate({
-            where: { salespersonId: sp.id, collectedAt: { gte: startOfDay(now), lte: endOfDay(now) } },
-            _sum: { amount: true },
-          }),
-        ]);
+    const ids = salespersons.map((sp) => sp.id);
+    const todayRange = { gte: startOfDay(now), lte: endOfDay(now) };
 
-        return {
-          id: sp.id,
-          name: sp.user.name,
-          avatarUrl: sp.user.avatarUrl,
-          territory: sp.territory?.name ?? null,
-          isOnline: sp.isOnline,
-          fieldWorkStatus: sp.fieldWorkStatus,
-          fieldWorkStartAt: sp.fieldWorkStartAt,
-          lastLat: sp.lastLat,
-          lastLng: sp.lastLng,
-          lastSpeed: sp.lastSpeed,
-          lastSeenAt: sp.lastSeenAt,
-          todayDistanceKm: sp.todayDistanceKm,
-          todayVisits,
-          todaySales: todayOrders._sum.grandTotal ?? 0,
-          todayCollections: todayCollections._sum.amount ?? 0,
-          currentCustomer: currentVisit?.customer.name ?? null,
-          currentVisitStatus: currentVisit?.status ?? "NONE",
-        };
-      })
-    );
+    // Batch the per-salesperson stats into one query each (grouped by salespersonId) instead of
+    // firing 4 queries per salesperson - this endpoint is polled continuously by the live map.
+    const [visitCounts, inProgressVisits, orderSums, collectionSums] = await Promise.all([
+      prisma.visit.groupBy({
+        by: ["salespersonId"],
+        where: { salespersonId: { in: ids }, createdAt: todayRange },
+        _count: true,
+      }),
+      prisma.visit.findMany({
+        where: { salespersonId: { in: ids }, status: "IN_PROGRESS" },
+        include: { customer: true },
+        orderBy: { checkInAt: "desc" },
+      }),
+      prisma.order.groupBy({
+        by: ["salespersonId"],
+        where: { salespersonId: { in: ids }, createdAt: todayRange },
+        _sum: { grandTotal: true },
+      }),
+      prisma.collection.groupBy({
+        by: ["salespersonId"],
+        where: { salespersonId: { in: ids }, collectedAt: todayRange },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const todayVisitsMap = new Map(visitCounts.map((v) => [v.salespersonId, v._count]));
+    const todaySalesMap = new Map(orderSums.map((o) => [o.salespersonId, o._sum.grandTotal ?? 0]));
+    const todayCollectionsMap = new Map(collectionSums.map((c) => [c.salespersonId, c._sum.amount ?? 0]));
+    // inProgressVisits is ordered by checkInAt desc, so the first occurrence per salesperson is
+    // their most recent in-progress visit (matches the previous per-row findFirst semantics).
+    const currentVisitMap = new Map<string, (typeof inProgressVisits)[number]>();
+    for (const v of inProgressVisits) {
+      if (!currentVisitMap.has(v.salespersonId)) currentVisitMap.set(v.salespersonId, v);
+    }
+
+    const enriched = salespersons.map((sp) => {
+      const currentVisit = currentVisitMap.get(sp.id);
+      return {
+        id: sp.id,
+        name: sp.user.name,
+        avatarUrl: sp.user.avatarUrl,
+        territory: sp.territory?.name ?? null,
+        isOnline: sp.isOnline,
+        fieldWorkStatus: sp.fieldWorkStatus,
+        fieldWorkStartAt: sp.fieldWorkStartAt,
+        lastLat: sp.lastLat,
+        lastLng: sp.lastLng,
+        lastSpeed: sp.lastSpeed,
+        lastSeenAt: sp.lastSeenAt,
+        todayDistanceKm: sp.todayDistanceKm,
+        todayVisits: todayVisitsMap.get(sp.id) ?? 0,
+        todaySales: todaySalesMap.get(sp.id) ?? 0,
+        todayCollections: todayCollectionsMap.get(sp.id) ?? 0,
+        currentCustomer: currentVisit?.customer.name ?? null,
+        currentVisitStatus: currentVisit?.status ?? "NONE",
+      };
+    });
 
     res.json(enriched);
   })
@@ -260,32 +280,36 @@ export async function recordLocationPing(salespersonId: string, input: PingInput
     }
   }
 
-  const ping = await prisma.locationPing.create({
-    data: {
-      salespersonId,
-      lat: input.lat,
-      lng: input.lng,
-      speed: input.speed,
-      accuracy: input.accuracy,
-      heading: input.heading,
-      recordedAt,
-    },
-  });
-
   const incrementKm = last ? haversineKm(last.lat, last.lng, input.lat, input.lng) : 0;
 
-  const sp = await prisma.salesperson.update({
-    where: { id: salespersonId },
-    data: {
-      lastLat: input.lat,
-      lastLng: input.lng,
-      lastSpeed: input.speed,
-      lastSeenAt: recordedAt,
-      isOnline: true,
-      todayDistanceKm: { increment: incrementKm },
-    },
-    include: { user: { select: { name: true } } },
-  });
+  // The ping insert and the salesperson row update are independent writes (neither depends on
+  // the other's result), so run them concurrently instead of serially to cut round-trip latency
+  // in half on every GPS tick.
+  const [ping, sp] = await Promise.all([
+    prisma.locationPing.create({
+      data: {
+        salespersonId,
+        lat: input.lat,
+        lng: input.lng,
+        speed: input.speed,
+        accuracy: input.accuracy,
+        heading: input.heading,
+        recordedAt,
+      },
+    }),
+    prisma.salesperson.update({
+      where: { id: salespersonId },
+      data: {
+        lastLat: input.lat,
+        lastLng: input.lng,
+        lastSpeed: input.speed,
+        lastSeenAt: recordedAt,
+        isOnline: true,
+        todayDistanceKm: { increment: incrementKm },
+      },
+      include: { user: { select: { name: true } } },
+    }),
+  ]);
 
   try {
     getIO()
