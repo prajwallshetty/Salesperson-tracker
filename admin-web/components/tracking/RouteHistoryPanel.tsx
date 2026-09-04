@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import mapboxgl from "mapbox-gl";
 import { api, apiErrorMessage } from "@/lib/api";
 import { formatTime, todayIso } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IconPause, IconPlay } from "@/components/icons";
-import { endIcon, replayIcon, startIcon, stopIcon } from "@/components/tracking/mapIcons";
+import { MapboxMap, type MapboxMapHandle } from "@/components/maps/MapboxMap";
+import { endMarkerElement, replayMarkerElement, startMarkerElement, stopMarkerElement } from "@/components/maps/markerIcons";
 import { cn } from "@/lib/utils";
 import type { RouteHistoryResponse } from "@/types";
 
@@ -25,22 +26,12 @@ const OUTCOME_LABEL: Record<string, string> = {
   OTHER: "Other",
 };
 
+const ROUTE_SOURCE_ID = "route-history-line";
+const ROUTE_LAYER_ID = "route-history-line-layer";
+
 interface RouteHistoryPanelProps {
   salespersonId: string;
   salespersonName?: string;
-}
-
-function FitBounds({ positions }: { positions: [number, number][] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (positions.length === 0) return;
-    if (positions.length === 1) {
-      map.setView(positions[0], 14);
-    } else {
-      map.fitBounds(positions, { padding: [32, 32] });
-    }
-  }, [positions, map]);
-  return null;
 }
 
 export default function RouteHistoryPanel({ salespersonId, salespersonName }: RouteHistoryPanelProps) {
@@ -51,6 +42,9 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
   const [cursor, setCursor] = useState(0);
   const [speed, setSpeed] = useState(4);
   const timerRef = useRef<number | null>(null);
+  const mapHandleRef = useRef<MapboxMapHandle>(null);
+  const staticMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const replayMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -64,7 +58,9 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
   }, [salespersonId, date]);
 
   const points = data?.points ?? [];
-  const positions = useMemo<[number, number][]>(() => points.map((p) => [p.lat, p.lng]), [points]);
+  // [lng, lat] - Mapbox coordinate order, kept separate from historical route rendering
+  // logic so a live-tracking marker elsewhere is never confused with this replay data.
+  const positions = useMemo<[number, number][]>(() => points.map((p) => [p.lng, p.lat]), [points]);
 
   useEffect(() => {
     if (!playing || points.length === 0) return;
@@ -81,6 +77,90 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, [playing, speed, points.length]);
+
+  // Draw the route line + start/end/stop markers whenever the loaded route changes.
+  useEffect(() => {
+    const map = mapHandleRef.current?.getMap();
+    if (!map || positions.length === 0) return;
+
+    const draw = () => {
+      const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: positions },
+      };
+      const source = map.getSource(ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+      if (source) {
+        source.setData(geojson);
+      } else {
+        map.addSource(ROUTE_SOURCE_ID, { type: "geojson", data: geojson });
+        map.addLayer({
+          id: ROUTE_LAYER_ID,
+          type: "line",
+          source: ROUTE_SOURCE_ID,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": "#7c3aed", "line-width": 4, "line-opacity": 0.85 },
+        });
+      }
+
+      staticMarkersRef.current.forEach((m) => m.remove());
+      staticMarkersRef.current = [];
+
+      const startMarker = new mapboxgl.Marker({ element: startMarkerElement(), anchor: "center" })
+        .setLngLat(positions[0])
+        .setPopup(new mapboxgl.Popup({ offset: 12 }).setText(`Start · ${formatTime(points[0].recordedAt)}`))
+        .addTo(map);
+      const endMarker = new mapboxgl.Marker({ element: endMarkerElement(), anchor: "center" })
+        .setLngLat(positions[positions.length - 1])
+        .setPopup(new mapboxgl.Popup({ offset: 12 }).setText(`End · ${formatTime(points[points.length - 1].recordedAt)}`))
+        .addTo(map);
+      staticMarkersRef.current.push(startMarker, endMarker);
+
+      (data?.stops ?? []).forEach((s) => {
+        if (!s.checkInLat || !s.checkInLng) return;
+        const html = `<div style="font-size:12px;line-height:1.4;">
+          <p style="font-weight:600;margin-bottom:2px;">${s.customer?.name ?? "Customer"}</p>
+          <p>Check-in: ${s.checkInAt ? formatTime(s.checkInAt) : "-"}</p>
+          <p>Check-out: ${s.checkOutAt ? formatTime(s.checkOutAt) : "-"}</p>
+          ${s.outcome ? `<p style="margin-top:4px;">Outcome: ${OUTCOME_LABEL[s.outcome] ?? s.outcome}</p>` : ""}
+        </div>`;
+        const marker = new mapboxgl.Marker({ element: stopMarkerElement(), anchor: "center" })
+          .setLngLat([s.checkInLng as number, s.checkInLat as number])
+          .setPopup(new mapboxgl.Popup({ offset: 12 }).setHTML(html))
+          .addTo(map);
+        staticMarkersRef.current.push(marker);
+      });
+
+      const bounds = positions.reduce(
+        (b, p) => b.extend(p),
+        new mapboxgl.LngLatBounds(positions[0], positions[0])
+      );
+      if (positions.length === 1) map.setCenter(positions[0]);
+      else map.fitBounds(bounds, { padding: 48, duration: 0 });
+    };
+
+    if (map.isStyleLoaded()) draw();
+    else map.once("load", draw);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions, data?.stops]);
+
+  // Replay scrubber marker - moves independently of the static route/markers above.
+  useEffect(() => {
+    const map = mapHandleRef.current?.getMap();
+    if (!map || !positions[cursor]) return;
+    if (!replayMarkerRef.current) {
+      replayMarkerRef.current = new mapboxgl.Marker({ element: replayMarkerElement(), anchor: "center" }).addTo(map);
+    }
+    replayMarkerRef.current.setLngLat(positions[cursor]);
+  }, [cursor, positions]);
+
+  useEffect(
+    () => () => {
+      staticMarkersRef.current.forEach((m) => m.remove());
+      replayMarkerRef.current?.remove();
+    },
+    []
+  );
 
   const isToday = date === todayIso();
 
@@ -110,35 +190,7 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
           </div>
 
           <div className="h-[420px] w-full overflow-hidden rounded-2xl border border-border/60">
-            <MapContainer center={positions[0]} zoom={13} style={{ height: "100%", width: "100%" }}>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              />
-              <FitBounds positions={positions} />
-              <Polyline positions={positions} pathOptions={{ color: "#7c3aed", weight: 4, opacity: 0.85 }} />
-              <Marker position={positions[0]} icon={startIcon}>
-                <Popup>Start &middot; {formatTime(points[0].recordedAt)}</Popup>
-              </Marker>
-              <Marker position={positions[positions.length - 1]} icon={endIcon}>
-                <Popup>End &middot; {formatTime(points[points.length - 1].recordedAt)}</Popup>
-              </Marker>
-              {data.stops.map((s) =>
-                s.checkInLat && s.checkInLng ? (
-                  <Marker key={s.id} position={[s.checkInLat, s.checkInLng]} icon={stopIcon}>
-                    <Popup>
-                      <div className="text-xs">
-                        <p className="mb-1 font-semibold text-slate-700">{s.customer?.name ?? "Customer"}</p>
-                        <p>Check-in: {s.checkInAt ? formatTime(s.checkInAt) : "-"}</p>
-                        <p>Check-out: {s.checkOutAt ? formatTime(s.checkOutAt) : "-"}</p>
-                        {s.outcome && <p className="mt-1">Outcome: {OUTCOME_LABEL[s.outcome] ?? s.outcome}</p>}
-                      </div>
-                    </Popup>
-                  </Marker>
-                ) : null
-              )}
-              {positions[cursor] && <Marker position={positions[cursor]} icon={replayIcon} />}
-            </MapContainer>
+            <MapboxMap ref={mapHandleRef} center={positions[0]} zoom={13} className="h-full w-full" />
           </div>
 
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card">
