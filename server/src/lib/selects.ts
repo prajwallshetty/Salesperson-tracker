@@ -14,3 +14,8 @@ export const SAFE_USER_SELECT = {
   createdAt: true,
   updatedAt: true,
 } as const;
+
+// `accessCode` (the salesperson-app login credential) is stripped from every JSON response
+// at the response-middleware layer instead - see middleware/redactAccessCode.ts - since this
+// Prisma version has no `omit` API and the field appears deeply nested in many responses
+// (e.g. visit.salesperson.accessCode) that would be impractical to audit one-by-one.

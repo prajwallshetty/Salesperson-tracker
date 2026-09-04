@@ -29,26 +29,47 @@ import usersRoutes from "./routes/users.routes";
 
 import { setIO } from "./sockets/io";
 import { registerLocationSocket } from "./sockets/locationSocket";
+import { redactAccessCode } from "./middleware/redactAccessCode";
 
 const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = (process.env.CLIENT_ORIGIN || "").split(",").map((o) => o.trim()).filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
+
+// Browsers reject `Access-Control-Allow-Origin: *` combined with credentials outright -
+// the request silently loses its cookies/Authorization header instead of erroring loudly,
+// which is exactly the failure mode that looks like intermittent "insufficient access" or
+// randomly-broken login. So CORS must never fall back to a wildcard while credentials are
+// enabled: in production, an unset CLIENT_ORIGIN fails CLOSED (reject all origins, which
+// surfaces immediately as a visible CORS error) rather than falling back to "*" and
+// silently breaking every authenticated request instead. In development, default to the
+// two local frontends so this doesn't need configuring for local work.
+if (isProduction && allowedOrigins.length === 0) {
+  console.error(
+    "FATAL: CLIENT_ORIGIN is not set in production. Cookie-based auth requires an explicit, " +
+      "non-wildcard CORS origin when credentials are used. Set CLIENT_ORIGIN to a comma-" +
+      "separated list of your deployed frontend origins, e.g. " +
+      "CLIENT_ORIGIN=https://admin.example.com,https://app.example.com"
+  );
+}
+const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : isProduction ? [] : ["http://localhost:5173", "http://localhost:5174"];
 
 const io = new Server(server, {
-  cors: { origin: allowedOrigins.length ? allowedOrigins : "*", credentials: true },
+  cors: { origin: corsOrigin, credentials: true },
 });
 setIO(io);
 registerLocationSocket(io);
 
 app.use(
   cors({
-    origin: allowedOrigins.length ? allowedOrigins : "*",
+    origin: corsOrigin,
     credentials: true,
   })
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
+app.use(redactAccessCode);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));

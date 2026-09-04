@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { hashPassword } from "../lib/auth";
 import { SAFE_USER_SELECT } from "../lib/selects";
+import { generateUniqueAccessCode } from "../lib/accessCode";
 
 export interface CreateSalespersonAccountInput {
   name: string;
@@ -33,14 +34,19 @@ export async function createSalespersonAccount(input: CreateSalespersonAccountIn
       role: "SALESPERSON",
     },
   });
+  const accessCode = await generateUniqueAccessCode();
   const salesperson = await prisma.salesperson.create({
     data: {
       userId: user.id,
       employeeCode: input.employeeCode,
       territoryId: input.territoryId || null,
       managerId: input.managerId || null,
+      accessCode,
     },
     include: { user: { select: SAFE_USER_SELECT }, territory: true },
   });
+  // accessCode is intentionally returned here (the admin who just created this account
+  // needs to see the code immediately) but must NOT leak from any other salesperson
+  // endpoint - see the explicit `select` on every other query that returns a Salesperson.
   return salesperson;
 }

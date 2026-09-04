@@ -18,6 +18,7 @@ interface AuthState {
   loginStatus: "idle" | "loading" | "error";
   error: string | null;
   login: (email: string, password: string) => Promise<AuthUser>;
+  loginWithAccessCode: (accessCode: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
@@ -62,6 +63,25 @@ export const useAuthStore = create<AuthState>()((set) => ({
       return user;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";
+      set({ loginStatus: "error", error: message });
+      throw err;
+    }
+  },
+
+  // The salesperson app authenticates with a short access code (issued/managed by an admin)
+  // instead of email/password. This hits a separate backend endpoint but establishes the exact
+  // same server-issued session cookie as /auth/login - identity and role are still derived
+  // server-side, never trusted from the client.
+  loginWithAccessCode: async (accessCode) => {
+    set({ loginStatus: "loading", error: null });
+    try {
+      const res = await api.post<LoginResponse>("/auth/access-code-login", { accessCode });
+      const { user } = res.data;
+      set({ user, sessionStatus: "authenticated", loginStatus: "idle", error: null });
+      connectSocket();
+      return user;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Invalid access code";
       set({ loginStatus: "error", error: message });
       throw err;
     }

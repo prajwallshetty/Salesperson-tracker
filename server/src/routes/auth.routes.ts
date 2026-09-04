@@ -15,17 +15,26 @@ const loginSchema = z.object({
 // 30 days, matching the JWT's own expiry (see lib/auth.ts signToken).
 const COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-// sameSite: "lax" works for local dev because admin-web (:5173) and sales-app (:5174) both talk
-// to the backend on localhost:4000 - browsers treat different localhost ports as the same site
-// for SameSite purposes. In the real deployment, if the two frontends and the API end up on
-// genuinely different registrable domains (not just different ports/subdomains of one domain),
-// this will need sameSite: "none" + secure: true instead, which also requires HTTPS on all three
-// origins (browsers reject SameSite=None cookies over plain HTTP).
+// In local dev, admin-web (:5173) and sales-app (:5174) both talk to the backend on
+// localhost:4000 - browsers treat different localhost ports as the same site for SameSite
+// purposes, so sameSite:"lax" (which doesn't require HTTPS) works fine there.
+//
+// In production the two frontends and the API are near-certainly on genuinely different
+// registrable domains (separate Vercel projects / a separate backend host) - this is a
+// cross-site relationship, and SameSite=Lax cookies are NOT sent on cross-site fetch/XHR
+// requests at all (only on top-level navigations). That means login would appear to
+// succeed (the cookie gets set) while every subsequent API call silently arrives with no
+// cookie, producing exactly the "login works but nothing after it does", "logout is
+// unreliable", "insufficient access" symptoms this was tracked down to fix. Production
+// therefore always uses sameSite:"none" (which requires secure:true - satisfied since
+// production is HTTPS) - this is also correct/harmless for a same-site deployment, so
+// there's no need to detect same-site vs. cross-site, just to distinguish dev from prod.
 function cookieOptions() {
+  const isProduction = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    secure: isProduction,
+    sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
     maxAge: COOKIE_MAX_AGE_MS,
     path: "/",
   };
@@ -65,10 +74,60 @@ router.post(
   })
 );
 
+const accessCodeLoginSchema = z.object({
+  accessCode: z.string().trim().min(1),
+});
+
+router.post(
+  "/access-code-login",
+  asyncHandler(async (req, res) => {
+    const { accessCode } = accessCodeLoginSchema.parse(req.body);
+    // Codes are generated upper-case (see lib/accessCode.ts); normalize input the same
+    // way so a salesperson typing lowercase on a phone keyboard isn't rejected.
+    const normalized = accessCode.toUpperCase();
+
+    const salesperson = await prisma.salesperson.findUnique({
+      where: { accessCode: normalized },
+      include: { user: true },
+    });
+
+    // Same generic message whether the code doesn't exist, is disabled, or the account is
+    // deactivated - never reveal which of those is true to an unauthenticated caller.
+    const invalid = () => res.status(401).json({ error: "Invalid access code" });
+    if (!salesperson || !salesperson.accessCodeEnabled) return invalid();
+    if (!salesperson.user.isActive || salesperson.status !== "ACTIVE") return invalid();
+
+    // Identity is derived entirely server-side from the matched record - the client never
+    // supplies a salespersonId/userId/role that gets trusted.
+    const token = signToken({
+      userId: salesperson.user.id,
+      role: salesperson.user.role,
+      salespersonId: salesperson.id,
+    });
+
+    await prisma.salesperson.update({ where: { id: salesperson.id }, data: { accessCodeLastUsedAt: new Date() } });
+
+    res.cookie(AUTH_COOKIE_NAME, token, cookieOptions());
+    res.json({
+      user: {
+        id: salesperson.user.id,
+        name: salesperson.user.name,
+        email: salesperson.user.email,
+        role: salesperson.user.role,
+        avatarUrl: salesperson.user.avatarUrl,
+        salespersonId: salesperson.id,
+        salespersonStatus: salesperson.status,
+      },
+    });
+  })
+);
+
 router.post(
   "/logout",
   asyncHandler(async (_req, res) => {
-    res.clearCookie(AUTH_COOKIE_NAME, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" });
+    // Must match the attributes the cookie was set with (sameSite/secure especially) or
+    // the browser won't recognize it as the same cookie and silently keeps it around.
+    res.clearCookie(AUTH_COOKIE_NAME, cookieOptions());
     res.status(204).end();
   })
 );

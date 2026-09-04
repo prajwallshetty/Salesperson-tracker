@@ -146,6 +146,19 @@ model Salesperson {
   isOnline         Boolean           @default(false)
   todayDistanceKm  Float             @default(0)
 
+  // Salesperson-app login uses a short access code instead of email/password (admin
+  // accounts are unaffected - they still use the existing email/password flow). Stored
+  // as plaintext rather than hashed deliberately: admins need to view/copy an existing
+  // code on demand (not just once at generation, per the required UI), and this is a
+  // low-stakes convenience credential scoped to one salesperson's own limited-permission
+  // account, not a password/secret - hashing it would only protect against a DB leak
+  // while offering no protection against the code being read from the admin UI anyway,
+  // which the feature requires. Never returned from list/general salesperson endpoints -
+  // only a dedicated admin-authorized endpoint exposes it.
+  accessCode        String?   @unique
+  accessCodeEnabled Boolean   @default(true)
+  accessCodeLastUsedAt DateTime?
+
   customers      Customer[]
   targets        Target[]
   attendance     Attendance[]

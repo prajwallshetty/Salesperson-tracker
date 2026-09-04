@@ -65,13 +65,25 @@ backward compatibility, but new code should just use `withCredentials: true`.)
 - `POST /api/auth/login` `{ email, password }` → `{ user: { id, name, email, role, avatarUrl, salespersonId, salespersonStatus } }`.
   Sets the `sf_token` httpOnly cookie (see above) - there is no `token` in the body anymore.
   Returns 401 for a deactivated account, same as wrong credentials.
+- `POST /api/auth/access-code-login` `{ accessCode }` → same `{ user }` shape and cookie as
+  `/auth/login`. This is the sales-app's sign-in method (salespeople don't use email/password);
+  admin accounts are unaffected. Returns 401 `Invalid access code` for an unknown code, a
+  disabled code, or an inactive/deactivated salesperson - deliberately the same generic error
+  for all three so a caller can't enumerate which codes exist.
 - `POST /api/auth/logout` (auth) → 204, clears the `sf_token` cookie.
 - `GET /api/auth/me` (auth) → current user object (same shape as the login body's `user`)
 
 ## Salespersons (admin unless noted)
 
 - `GET /api/salespersons?status=&territoryId=&managerId=&search=&page=&pageSize=` → `{ items, total, page, pageSize }`
-- `POST /api/salespersons` `{ name, email, password, phone?, employeeCode, territoryId?, managerId? }` → created salesperson (includes `user`, `territory`)
+- `POST /api/salespersons` `{ name, email, password, phone?, employeeCode, territoryId?, managerId? }` → created salesperson (includes `user`, `territory`). The response includes the
+  auto-generated `accessCode` (needed once, immediately, to hand to the new salesperson) - every
+  other endpoint that returns a Salesperson strips `accessCode` from the response.
+- `GET /api/salespersons/:id/access-code` (admin) → `{ accessCode, accessCodeEnabled, accessCodeLastUsedAt }`
+- `POST /api/salespersons/:id/access-code/regenerate` (admin) → issues a new code (old one stops
+  working immediately), re-enables it, and clears `accessCodeLastUsedAt`. Same response shape.
+- `PATCH /api/salespersons/:id/access-code` `{ enabled: boolean }` (admin) → enable/disable the
+  existing code without changing its value. Same response shape.
 - `GET /api/salespersons/:id` (admin or self) → profile with `_count.{customers,visits,orders}`
 - `PATCH /api/salespersons/:id` `{ name?, phone?, employeeCode?, territoryId?, managerId? }`
 - `PATCH /api/salespersons/:id/status` `{ status: "ACTIVE"|"INACTIVE" }`

@@ -19,6 +19,7 @@ import { formatCurrency, formatDate, formatDateTime, formatNumber, relativeTime 
 import { EditSalespersonModal } from "@/components/salespersons/EditSalespersonModal";
 import { AssignCustomersModal } from "@/components/salespersons/AssignCustomersModal";
 import { SetTargetModal } from "@/components/salespersons/SetTargetModal";
+import { AccessCodeCard } from "@/components/salespersons/AccessCodeCard";
 import type { Collection, Order, Salesperson, Visit } from "@/types";
 
 const RouteHistoryPanel = dynamic(() => import("@/components/tracking/RouteHistoryPanel"), {
@@ -232,6 +233,9 @@ function ProfileTab({ sp }: { sp: Salesperson }) {
           <InfoRow label="Distance today" value={`${sp.todayDistanceKm.toFixed(1)} km`} />
         </CardContent>
       </Card>
+      <div className="lg:col-span-2">
+        <AccessCodeCard salespersonId={sp.id} />
+      </div>
     </div>
   );
 }
