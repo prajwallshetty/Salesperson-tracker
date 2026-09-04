@@ -1,26 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import maplibregl from "maplibre-gl";
 import { X } from "lucide-react";
-import { api, apiErrorMessage, assetUrl } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import { subscribe } from "@/lib/socket";
-import { formatCurrency, formatNumber, formatTime, initials, relativeTime } from "@/lib/format";
+import { formatCurrency, formatNumber, formatTime, relativeTime } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { LiveMap, type LiveMapHandle } from "@/components/maps/LiveMap";
-import { useAnimatedMarkers } from "@/components/maps/useAnimatedMarkers";
-import { avatarMarkerElement, pinMarkerElement } from "@/components/maps/markerIcons";
+import { LiveTrackingMap } from "@/components/maps/LiveTrackingMap";
 import { GeocodeSearch, type GeocodeResult } from "@/components/tracking/GeocodeSearch";
 import { ConnectionStatus } from "@/components/tracking/ConnectionStatus";
 import { IconMap } from "@/components/icons";
 import type { LiveSalesperson } from "@/types";
-
-const DEFAULT_CENTER: [number, number] = [77.5946, 12.9716]; // [lng, lat] - Bangalore
 
 // A location is only trusted as "live" if it's fresher than this - matches the server's
 // own /tracking/live isOnline-staleness window, so the UI never contradicts the backend.
@@ -56,9 +51,6 @@ export default function LiveTrackingView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [, forceTick] = useState(0);
   const [searchResult, setSearchResult] = useState<GeocodeResult | null>(null);
-  const mapHandleRef = useRef<LiveMapHandle>(null);
-  const searchMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const markers = useAnimatedMarkers();
 
   const load = () => {
     api
@@ -141,76 +133,14 @@ export default function LiveTrackingView() {
   }, []);
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
-  // NOTE on clustering: deliberately not added. The seeded demo data has 8 salespersons
-  // total, and a clustering library earns its place once markers actually start
-  // overlapping at the default zoom, not before. Revisit if the real count grows into
-  // the dozens+.
-  const positions = useMemo(() => items.filter((i) => i.lastLat && i.lastLng), [items]);
-
-  // Sync markers directly on the map instance whenever `positions` changes - this runs
-  // outside React's render for the map itself (MapLibre owns its own canvas), so a single
-  // salesperson moving updates exactly one marker via useAnimatedMarkers' interpolation,
-  // never the whole map or unrelated DOM.
-  useEffect(() => {
-    const map = mapHandleRef.current?.getMap();
-    if (!map) return;
-    const seen = new Set<string>();
-    positions.forEach((sp) => {
-      seen.add(sp.id);
-      markers.upsert(
-        sp.id,
-        [sp.lastLng as number, sp.lastLat as number],
-        () => {
-          const el = avatarMarkerElement({ src: assetUrl(sp.avatarUrl), initials: initials(sp.name), online: sp.isOnline && !isStale(sp.lastSeenAt) });
-          el.addEventListener("click", () => setSelectedId(sp.id));
-          return new maplibregl.Marker({ element: el, anchor: "center" });
-        },
-        map
-      );
-      // Online/offline dot and avatar can change without lat/lng changing (e.g. staleness
-      // ticking over, or an avatar URL loading in later) - refresh the element in place
-      // rather than recreating the marker, which would restart its position mid-animation.
-      const existingMarker = markers.get(sp.id);
-      if (existingMarker) {
-        const el = existingMarker.getElement();
-        const fresh = avatarMarkerElement({ src: assetUrl(sp.avatarUrl), initials: initials(sp.name), online: sp.isOnline && !isStale(sp.lastSeenAt) });
-        if (el.innerHTML !== fresh.innerHTML) el.innerHTML = fresh.innerHTML;
-      }
-    });
-    // Drop markers for salespersons no longer in the live set.
-    markers.clearMissing(seen);
-  });
-
-  useEffect(() => {
-    const map = mapHandleRef.current?.getMap();
-    if (!map || !selected || !selected.lastLat || !selected.lastLng) return;
-    map.flyTo({ center: [selected.lastLng, selected.lastLat], zoom: Math.max(map.getZoom(), 14), duration: 600 });
-  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const map = mapHandleRef.current?.getMap();
-    if (!map) return;
-    if (searchMarkerRef.current) {
-      searchMarkerRef.current.remove();
-      searchMarkerRef.current = null;
-    }
-    if (searchResult) {
-      const el = pinMarkerElement("#f59e0b");
-      const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
-        .setLngLat([searchResult.lng, searchResult.lat])
-        .setPopup(new maplibregl.Popup({ offset: 24 }).setText(searchResult.displayName))
-        .addTo(map);
-      searchMarkerRef.current = marker;
-      map.flyTo({ center: [searchResult.lng, searchResult.lat], zoom: Math.max(map.getZoom(), 14), duration: 600 });
-    }
-  }, [searchResult]);
-
-  const handleMapLoad = (map: maplibregl.Map) => {
-    const first = positions[0];
-    if (first?.lastLat && first?.lastLng) {
-      map.setCenter([first.lastLng, first.lastLat]);
-    }
-  };
+  // NOTE on clustering: deliberately not added yet. The seeded demo data has 8
+  // salespersons total; a clustering layer earns its place once markers actually start
+  // overlapping at a real deployment's scale, not before. The current per-marker DOM
+  // approach comfortably handles low hundreds of markers - if real usage grows well past
+  // that, switch LiveTrackingMap's marker rendering to a clustered GeoJSON symbol layer
+  // (MapLibre supports `cluster: true` natively on GeoJSON sources) rather than
+  // individual maplibregl.Marker DOM elements, at the cost of losing per-marker custom
+  // avatar HTML in favor of icon-image sprites.
 
   return (
     <div className="flex h-[calc(100vh-8.5rem)] flex-col gap-4">
@@ -273,7 +203,15 @@ export default function LiveTrackingView() {
         </div>
 
         <div className="relative min-h-[320px] overflow-hidden rounded-2xl border border-border/60">
-          <LiveMap ref={mapHandleRef} center={DEFAULT_CENTER} zoom={12} className="h-full w-full" onLoad={handleMapLoad} showGeolocate />
+          <LiveTrackingMap
+            salespeople={items}
+            isStale={isStale}
+            selectedId={selectedId}
+            onSelectMarker={setSelectedId}
+            searchResult={searchResult}
+            className="h-full w-full"
+            showGeolocate
+          />
 
           <GeocodeSearch className="absolute left-4 right-4 top-4 z-10 sm:right-auto" onSelect={setSearchResult} />
 
