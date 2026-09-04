@@ -73,7 +73,7 @@ body {
   @apply bg-transparent;
 }
 
-.mapboxgl-popup-content {
+.maplibregl-popup-content {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   border-radius: 0.75rem !important;
   box-shadow: 0 8px 24px rgba(15, 15, 20, 0.15) !important;

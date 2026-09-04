@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import mapboxgl from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import { Radar } from "lucide-react";
 import { api, assetUrl } from "@/lib/api";
 import { subscribe } from "@/lib/socket";
@@ -10,7 +10,7 @@ import { relativeTime, initials } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/Skeleton";
-import { MapboxMap, type MapboxMapHandle } from "@/components/maps/MapboxMap";
+import { LiveMap, type LiveMapHandle } from "@/components/maps/LiveMap";
 import { useAnimatedMarkers } from "@/components/maps/useAnimatedMarkers";
 import { avatarMarkerElement } from "@/components/maps/markerIcons";
 import type { LiveSalesperson } from "@/types";
@@ -29,7 +29,7 @@ export default function LiveTrackingCard() {
   const router = useRouter();
   const [items, setItems] = useState<LiveSalesperson[]>([]);
   const [loading, setLoading] = useState(true);
-  const mapHandleRef = useRef<MapboxMapHandle>(null);
+  const mapHandleRef = useRef<LiveMapHandle>(null);
   const markers = useAnimatedMarkers();
 
   useEffect(() => {
@@ -73,14 +73,14 @@ export default function LiveTrackingCard() {
       markers.upsert(
         sp.id,
         [sp.lastLng as number, sp.lastLat as number],
-        () => new mapboxgl.Marker({ element: avatarMarkerElement({ src: assetUrl(sp.avatarUrl), initials: initials(sp.name), online: sp.isOnline, size: 28 }), anchor: "center" }),
+        () => new maplibregl.Marker({ element: avatarMarkerElement({ src: assetUrl(sp.avatarUrl), initials: initials(sp.name), online: sp.isOnline, size: 28 }), anchor: "center" }),
         map
       );
     });
     markers.clearMissing(seen);
   });
 
-  const handleMapLoad = (map: mapboxgl.Map) => {
+  const handleMapLoad = (map: maplibregl.Map) => {
     map.scrollZoom.disable();
     map.dragPan.disable();
     map.doubleClickZoom.disable();
@@ -100,7 +100,7 @@ export default function LiveTrackingCard() {
             <EmptyState icon={<Radar className="size-5" />} title="No one on field" message="No active salespersons right now." />
           </div>
         ) : (
-          <MapboxMap ref={mapHandleRef} center={DEFAULT_CENTER} zoom={11} className="h-full w-full" onLoad={handleMapLoad} showNavigation={false} />
+          <LiveMap ref={mapHandleRef} center={DEFAULT_CENTER} zoom={11} className="h-full w-full" onLoad={handleMapLoad} showNavigation={false} />
         )}
       </div>
       <div className="flex flex-col gap-1.5">

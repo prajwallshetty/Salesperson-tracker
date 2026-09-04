@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import mapboxgl from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import { X } from "lucide-react";
 import { api, apiErrorMessage, assetUrl } from "@/lib/api";
 import { subscribe } from "@/lib/socket";
@@ -12,7 +12,7 @@ import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { MapboxMap, type MapboxMapHandle } from "@/components/maps/MapboxMap";
+import { LiveMap, type LiveMapHandle } from "@/components/maps/LiveMap";
 import { useAnimatedMarkers } from "@/components/maps/useAnimatedMarkers";
 import { avatarMarkerElement, pinMarkerElement } from "@/components/maps/markerIcons";
 import { GeocodeSearch, type GeocodeResult } from "@/components/tracking/GeocodeSearch";
@@ -56,8 +56,8 @@ export default function LiveTrackingView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [, forceTick] = useState(0);
   const [searchResult, setSearchResult] = useState<GeocodeResult | null>(null);
-  const mapHandleRef = useRef<MapboxMapHandle>(null);
-  const searchMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const mapHandleRef = useRef<LiveMapHandle>(null);
+  const searchMarkerRef = useRef<maplibregl.Marker | null>(null);
   const markers = useAnimatedMarkers();
 
   const load = () => {
@@ -148,7 +148,7 @@ export default function LiveTrackingView() {
   const positions = useMemo(() => items.filter((i) => i.lastLat && i.lastLng), [items]);
 
   // Sync markers directly on the map instance whenever `positions` changes - this runs
-  // outside React's render for the map itself (Mapbox owns its own canvas), so a single
+  // outside React's render for the map itself (MapLibre owns its own canvas), so a single
   // salesperson moving updates exactly one marker via useAnimatedMarkers' interpolation,
   // never the whole map or unrelated DOM.
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function LiveTrackingView() {
         () => {
           const el = avatarMarkerElement({ src: assetUrl(sp.avatarUrl), initials: initials(sp.name), online: sp.isOnline && !isStale(sp.lastSeenAt) });
           el.addEventListener("click", () => setSelectedId(sp.id));
-          return new mapboxgl.Marker({ element: el, anchor: "center" });
+          return new maplibregl.Marker({ element: el, anchor: "center" });
         },
         map
       );
@@ -196,16 +196,16 @@ export default function LiveTrackingView() {
     }
     if (searchResult) {
       const el = pinMarkerElement("#f59e0b");
-      const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+      const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
         .setLngLat([searchResult.lng, searchResult.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 24 }).setText(searchResult.displayName))
+        .setPopup(new maplibregl.Popup({ offset: 24 }).setText(searchResult.displayName))
         .addTo(map);
       searchMarkerRef.current = marker;
       map.flyTo({ center: [searchResult.lng, searchResult.lat], zoom: Math.max(map.getZoom(), 14), duration: 600 });
     }
   }, [searchResult]);
 
-  const handleMapLoad = (map: mapboxgl.Map) => {
+  const handleMapLoad = (map: maplibregl.Map) => {
     const first = positions[0];
     if (first?.lastLat && first?.lastLng) {
       map.setCenter([first.lastLng, first.lastLat]);
@@ -273,7 +273,7 @@ export default function LiveTrackingView() {
         </div>
 
         <div className="relative min-h-[320px] overflow-hidden rounded-2xl border border-border/60">
-          <MapboxMap ref={mapHandleRef} center={DEFAULT_CENTER} zoom={12} className="h-full w-full" onLoad={handleMapLoad} showGeolocate />
+          <LiveMap ref={mapHandleRef} center={DEFAULT_CENTER} zoom={12} className="h-full w-full" onLoad={handleMapLoad} showGeolocate />
 
           <GeocodeSearch className="absolute left-4 right-4 top-4 z-10 sm:right-auto" onSelect={setSearchResult} />
 

@@ -1,4 +1,4 @@
-// DOM-element marker builders for mapboxgl.Marker (which accepts any HTMLElement),
+// DOM-element marker builders for maplibregl.Marker (which accepts any HTMLElement),
 // mirroring the old Leaflet divIcon markers so the visual language didn't need to change.
 
 function escapeHtml(s: string): string {

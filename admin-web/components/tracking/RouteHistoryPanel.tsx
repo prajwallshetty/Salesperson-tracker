@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import mapboxgl from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import { api, apiErrorMessage } from "@/lib/api";
 import { formatTime, todayIso } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IconPause, IconPlay } from "@/components/icons";
-import { MapboxMap, type MapboxMapHandle } from "@/components/maps/MapboxMap";
+import { LiveMap, type LiveMapHandle } from "@/components/maps/LiveMap";
 import { endMarkerElement, replayMarkerElement, startMarkerElement, stopMarkerElement } from "@/components/maps/markerIcons";
 import { cn } from "@/lib/utils";
 import type { RouteHistoryResponse } from "@/types";
@@ -42,9 +42,9 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
   const [cursor, setCursor] = useState(0);
   const [speed, setSpeed] = useState(4);
   const timerRef = useRef<number | null>(null);
-  const mapHandleRef = useRef<MapboxMapHandle>(null);
-  const staticMarkersRef = useRef<mapboxgl.Marker[]>([]);
-  const replayMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const mapHandleRef = useRef<LiveMapHandle>(null);
+  const staticMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const replayMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -58,7 +58,7 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
   }, [salespersonId, date]);
 
   const points = data?.points ?? [];
-  // [lng, lat] - Mapbox coordinate order, kept separate from historical route rendering
+  // [lng, lat] - MapLibre/GeoJSON coordinate order, kept separate from historical route rendering
   // logic so a live-tracking marker elsewhere is never confused with this replay data.
   const positions = useMemo<[number, number][]>(() => points.map((p) => [p.lng, p.lat]), [points]);
 
@@ -89,7 +89,7 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
         properties: {},
         geometry: { type: "LineString", coordinates: positions },
       };
-      const source = map.getSource(ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+      const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
       if (source) {
         source.setData(geojson);
       } else {
@@ -106,13 +106,13 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
       staticMarkersRef.current.forEach((m) => m.remove());
       staticMarkersRef.current = [];
 
-      const startMarker = new mapboxgl.Marker({ element: startMarkerElement(), anchor: "center" })
+      const startMarker = new maplibregl.Marker({ element: startMarkerElement(), anchor: "center" })
         .setLngLat(positions[0])
-        .setPopup(new mapboxgl.Popup({ offset: 12 }).setText(`Start · ${formatTime(points[0].recordedAt)}`))
+        .setPopup(new maplibregl.Popup({ offset: 12 }).setText(`Start · ${formatTime(points[0].recordedAt)}`))
         .addTo(map);
-      const endMarker = new mapboxgl.Marker({ element: endMarkerElement(), anchor: "center" })
+      const endMarker = new maplibregl.Marker({ element: endMarkerElement(), anchor: "center" })
         .setLngLat(positions[positions.length - 1])
-        .setPopup(new mapboxgl.Popup({ offset: 12 }).setText(`End · ${formatTime(points[points.length - 1].recordedAt)}`))
+        .setPopup(new maplibregl.Popup({ offset: 12 }).setText(`End · ${formatTime(points[points.length - 1].recordedAt)}`))
         .addTo(map);
       staticMarkersRef.current.push(startMarker, endMarker);
 
@@ -124,16 +124,16 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
           <p>Check-out: ${s.checkOutAt ? formatTime(s.checkOutAt) : "-"}</p>
           ${s.outcome ? `<p style="margin-top:4px;">Outcome: ${OUTCOME_LABEL[s.outcome] ?? s.outcome}</p>` : ""}
         </div>`;
-        const marker = new mapboxgl.Marker({ element: stopMarkerElement(), anchor: "center" })
+        const marker = new maplibregl.Marker({ element: stopMarkerElement(), anchor: "center" })
           .setLngLat([s.checkInLng as number, s.checkInLat as number])
-          .setPopup(new mapboxgl.Popup({ offset: 12 }).setHTML(html))
+          .setPopup(new maplibregl.Popup({ offset: 12 }).setHTML(html))
           .addTo(map);
         staticMarkersRef.current.push(marker);
       });
 
       const bounds = positions.reduce(
         (b, p) => b.extend(p),
-        new mapboxgl.LngLatBounds(positions[0], positions[0])
+        new maplibregl.LngLatBounds(positions[0], positions[0])
       );
       if (positions.length === 1) map.setCenter(positions[0]);
       else map.fitBounds(bounds, { padding: 48, duration: 0 });
@@ -149,7 +149,7 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
     const map = mapHandleRef.current?.getMap();
     if (!map || !positions[cursor]) return;
     if (!replayMarkerRef.current) {
-      replayMarkerRef.current = new mapboxgl.Marker({ element: replayMarkerElement(), anchor: "center" }).addTo(map);
+      replayMarkerRef.current = new maplibregl.Marker({ element: replayMarkerElement(), anchor: "center" }).addTo(map);
     }
     replayMarkerRef.current.setLngLat(positions[cursor]);
   }, [cursor, positions]);
@@ -190,7 +190,7 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
           </div>
 
           <div className="h-[420px] w-full overflow-hidden rounded-2xl border border-border/60">
-            <MapboxMap ref={mapHandleRef} center={positions[0]} zoom={13} className="h-full w-full" />
+            <LiveMap ref={mapHandleRef} center={positions[0]} zoom={13} className="h-full w-full" />
           </div>
 
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card">

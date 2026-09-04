@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import mapboxgl from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 
 interface MarkerEntry {
-  marker: mapboxgl.Marker;
+  marker: maplibregl.Marker;
   current: [number, number]; // [lng, lat]
   target: [number, number];
   raf: number | null;
 }
 
 /**
- * Keeps a set of mapboxgl.Marker instances keyed by id and smoothly interpolates each
+ * Keeps a set of maplibregl.Marker instances keyed by id and smoothly interpolates each
  * one's position on update instead of jumping - critically, moving one marker never
  * touches React state or re-renders anything: markers are mutated directly via
  * marker.setLngLat() inside a per-marker requestAnimationFrame loop. Use `upsert` for
@@ -43,7 +43,7 @@ export function useAnimatedMarkers() {
   }, []);
 
   const upsert = useCallback(
-    (id: string, lngLat: [number, number], createMarker: () => mapboxgl.Marker, map: mapboxgl.Map) => {
+    (id: string, lngLat: [number, number], createMarker: () => maplibregl.Marker, map: maplibregl.Map) => {
       const existing = markersRef.current.get(id);
       if (existing) {
         existing.target = lngLat;
