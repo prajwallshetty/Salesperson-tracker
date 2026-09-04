@@ -8,6 +8,7 @@ import {
   clearPositionWatch,
   friendlyGeoErrorMessage,
   getCurrentPosition,
+  shouldSendLocationUpdate,
   watchPosition,
 } from "@/lib/geolocation";
 import { getQueuedPings, queuePing, queuedPingCount, removeQueuedPing } from "@/lib/db";
@@ -109,11 +110,18 @@ export const useFieldWorkStore = create<FieldWorkState>()((set, get) => ({
       const point = await getCurrentPosition();
       await api.post("/tracking/field-work/start", { lat: point.lat, lng: point.lng });
 
+      // Gates which raw GPS fixes are actually relayed to the backend (see shouldSendLocationUpdate) —
+      // scoped to this field-work session so a fresh session always sends its first fix immediately.
+      let lastSent: { point: GeoPoint; sentAtMs: number } | null = null;
+
       const watchId = watchPosition(
         (p) => {
           // A successful fix clears any previously surfaced error state (e.g. brief GPS blip recovered).
           if (get().geoErrorMessage) set({ geoErrorMessage: null });
+          // Always reflect the latest raw fix in the UI (accuracy/status), independent of throttling.
           set({ lastPoint: p });
+          if (!shouldSendLocationUpdate(p, lastSent)) return;
+          lastSent = { point: p, sentAtMs: Date.now() };
           sendPing({
             lat: p.lat,
             lng: p.lng,

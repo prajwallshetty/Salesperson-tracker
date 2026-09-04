@@ -28,7 +28,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { GeoError, friendlyGeoErrorMessage, getCurrentPosition } from "@/lib/geolocation";
+import { GeoError, friendlyGeoErrorMessage, getCurrentPosition, haversineKm } from "@/lib/geolocation";
 import { cn } from "@/lib/utils";
 import type { Visit, VisitOutcome } from "@/types";
 
@@ -77,8 +77,28 @@ export default function VisitDetailPage() {
   const [outcome, setOutcome] = useState<VisitOutcome | "">("");
   const [followUpDate, setFollowUpDate] = useState<Date | undefined>(undefined);
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
 
   const elapsed = useElapsed(visit?.checkInAt);
+
+  // Show how far the salesperson currently is from the customer before they check in -
+  // informational only (no geofence/enforcement exists in the current business rules),
+  // using a single one-shot GPS read so this doesn't start continuous tracking on its own.
+  useEffect(() => {
+    if (!visit || visit.status !== "PLANNED" || !visit.customer?.lat || !visit.customer?.lng) return;
+    let cancelled = false;
+    getCurrentPosition()
+      .then((point) => {
+        if (cancelled) return;
+        setDistanceMeters(Math.round(haversineKm(point, { lat: visit.customer!.lat as number, lng: visit.customer!.lng as number }) * 1000));
+      })
+      .catch(() => {
+        /* silent here - the main Check In flow surfaces GPS errors when actually pressed */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visit?.id, visit?.status, visit?.customer?.lat, visit?.customer?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!id) return;
@@ -214,8 +234,13 @@ export default function VisitDetailPage() {
             </>
           ) : (
             <>
-              <p className="mb-4 text-sm text-muted-foreground">Ready to visit this customer?</p>
-              <Button onClick={handleCheckIn} loading={checkingIn} size="lg" className="h-14 w-full text-base shadow-md">
+              <p className="mb-1 text-sm text-muted-foreground">Ready to visit this customer?</p>
+              {distanceMeters !== null && (
+                <p className="mb-4 text-xs font-medium text-muted-foreground">
+                  {distanceMeters < 1000 ? `${distanceMeters} m away` : `${(distanceMeters / 1000).toFixed(1)} km away`}
+                </p>
+              )}
+              <Button onClick={handleCheckIn} loading={checkingIn} size="lg" className={cn("h-14 w-full text-base shadow-md", distanceMeters === null && "mt-3")}>
                 <MapPin className="h-5 w-5" />
                 {checkingIn ? "Checking in…" : "Check In"}
               </Button>
