@@ -1,21 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import maplibregl from "maplibre-gl";
 import { Radar } from "lucide-react";
-import { api, assetUrl } from "@/lib/api";
+import { api } from "@/lib/api";
 import { subscribe } from "@/lib/socket";
-import { relativeTime, initials } from "@/lib/format";
+import { relativeTime } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/Skeleton";
-import { LiveMap, type LiveMapHandle } from "@/components/maps/LiveMap";
-import { useAnimatedMarkers } from "@/components/maps/useAnimatedMarkers";
-import { avatarMarkerElement } from "@/components/maps/markerIcons";
+import { LiveTrackingMap } from "@/components/maps/LiveTrackingMap";
 import type { LiveSalesperson } from "@/types";
 
-const DEFAULT_CENTER: [number, number] = [77.5946, 12.9716]; // [lng, lat]
+const STALE_MS = 3 * 60 * 1000;
+function isStale(lastSeenAt: string | null): boolean {
+  if (!lastSeenAt) return true;
+  return Date.now() - new Date(lastSeenAt).getTime() > STALE_MS;
+}
 
 interface LocationUpdatePayload {
   salespersonId: string;
@@ -29,8 +30,6 @@ export default function LiveTrackingCard() {
   const router = useRouter();
   const [items, setItems] = useState<LiveSalesperson[]>([]);
   const [loading, setLoading] = useState(true);
-  const mapHandleRef = useRef<LiveMapHandle>(null);
-  const markers = useAnimatedMarkers();
 
   useEffect(() => {
     api
@@ -62,34 +61,6 @@ export default function LiveTrackingCard() {
   const positioned = items.filter((i) => i.lastLat && i.lastLng);
   const onlineCount = items.filter((i) => i.isOnline).length;
 
-  // Sync markers on the small preview map the same way the full tracking page does -
-  // one marker per salesperson, moved in place rather than the map being rebuilt.
-  useEffect(() => {
-    const map = mapHandleRef.current?.getMap();
-    if (!map) return;
-    const seen = new Set<string>();
-    positioned.forEach((sp) => {
-      seen.add(sp.id);
-      markers.upsert(
-        sp.id,
-        [sp.lastLng as number, sp.lastLat as number],
-        () => new maplibregl.Marker({ element: avatarMarkerElement({ src: assetUrl(sp.avatarUrl), initials: initials(sp.name), online: sp.isOnline, size: 28 }), anchor: "center" }),
-        map
-      );
-    });
-    markers.clearMissing(seen);
-  });
-
-  const handleMapLoad = (map: maplibregl.Map) => {
-    map.scrollZoom.disable();
-    map.dragPan.disable();
-    map.doubleClickZoom.disable();
-    map.boxZoom.disable();
-    map.keyboard.disable();
-    const first = positioned[0];
-    if (first?.lastLat && first?.lastLng) map.setCenter([first.lastLng, first.lastLat]);
-  };
-
   if (loading) return <Skeleton className="h-72 w-full" />;
 
   return (
@@ -100,7 +71,7 @@ export default function LiveTrackingCard() {
             <EmptyState icon={<Radar className="size-5" />} title="No one on field" message="No active salespersons right now." />
           </div>
         ) : (
-          <LiveMap ref={mapHandleRef} center={DEFAULT_CENTER} zoom={11} className="h-full w-full" onLoad={handleMapLoad} showNavigation={false} />
+          <LiveTrackingMap salespeople={items} isStale={isStale} className="h-full w-full" interactive={false} showNavigation={false} />
         )}
       </div>
       <div className="flex flex-col gap-1.5">

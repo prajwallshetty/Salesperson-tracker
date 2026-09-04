@@ -5,17 +5,13 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BASEMAP_STYLE, DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from "@/lib/maps/basemap";
 
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-// "streets-v2" is MapTiler's clean, minimal style - closest match to the app's premium
-// light design language (soft neutrals, no heavy labeling/POI clutter at low zoom).
-const MAPTILER_STYLE_URL = MAPTILER_KEY ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}` : null;
-
-export interface LiveMapHandle {
+export interface SalesGridMapHandle {
   getMap: () => maplibregl.Map | null;
 }
 
-interface LiveMapProps {
+interface SalesGridMapProps {
   /** [lng, lat] - GeoJSON/MapLibre coordinate order, not [lat, lng]. */
   center?: [number, number];
   zoom?: number;
@@ -24,12 +20,13 @@ interface LiveMapProps {
   showNavigation?: boolean;
   showGeolocate?: boolean;
   showFullscreen?: boolean;
+  /** Disables pan/zoom/rotate for small non-interactive previews (e.g. the dashboard's
+   * live-tracking widget) - the map still renders and updates markers normally. */
+  interactive?: boolean;
 }
 
-const DEFAULT_CENTER: [number, number] = [77.5946, 12.9716]; // Bangalore, [lng, lat]
-
 /**
- * Single shared MapLibre GL initialization point - every map on the admin dashboard
+ * Single shared MapLibre GL initialization point for the whole app - every map
  * (live tracking, its dashboard preview, route history) renders through this component
  * instead of each duplicating map setup. Client-only by construction ("use client" plus
  * all MapLibre/DOM access inside useEffect) so it's safe to import from a Server
@@ -41,8 +38,17 @@ const DEFAULT_CENTER: [number, number] = [77.5946, 12.9716]; // Bangalore, [lng,
  * backend; this component and its callers only ever consume already-fetched/streamed
  * coordinates from the API/socket layer.
  */
-export const LiveMap = forwardRef<LiveMapHandle, LiveMapProps>(function LiveMap(
-  { center = DEFAULT_CENTER, zoom = 11, className, onLoad, showNavigation = true, showGeolocate = false, showFullscreen = false },
+export const SalesGridMap = forwardRef<SalesGridMapHandle, SalesGridMapProps>(function SalesGridMap(
+  {
+    center = DEFAULT_MAP_CENTER,
+    zoom = DEFAULT_MAP_ZOOM,
+    className,
+    onLoad,
+    showNavigation = true,
+    showGeolocate = false,
+    showFullscreen = false,
+    interactive = true,
+  },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,36 +59,35 @@ export const LiveMap = forwardRef<LiveMapHandle, LiveMapProps>(function LiveMap(
   useImperativeHandle(ref, () => ({ getMap: () => mapRef.current }), []);
 
   useEffect(() => {
-    if (!MAPTILER_STYLE_URL) {
-      setError("Map tiles are not configured (set NEXT_PUBLIC_MAPTILER_KEY).");
-      return;
-    }
     if (!containerRef.current || mapRef.current) return;
 
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
         container: containerRef.current,
-        style: MAPTILER_STYLE_URL,
+        style: BASEMAP_STYLE,
         center,
         zoom,
         attributionControl: { compact: true },
+        interactive,
       });
     } catch {
       setError("This browser could not initialize the map (WebGL may be unavailable).");
       return;
     }
 
-    if (showNavigation) map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    if (showFullscreen) map.addControl(new maplibregl.FullscreenControl(), "top-right");
-    if (showGeolocate) {
-      map.addControl(
-        new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false }),
-        "top-right"
-      );
+    if (interactive) {
+      if (showNavigation) map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      if (showFullscreen) map.addControl(new maplibregl.FullscreenControl(), "top-right");
+      if (showGeolocate) {
+        map.addControl(
+          new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false }),
+          "top-right"
+        );
+      }
     }
 
-    // MapLibre emits a generic "error" event for style/tile/network/key failures alike -
+    // MapLibre emits a generic "error" event for style/tile/network failures alike -
     // surface it once instead of leaving a blank grey tile with no explanation.
     let reported = false;
     map.on("error", (e) => {
@@ -90,11 +95,7 @@ export const LiveMap = forwardRef<LiveMapHandle, LiveMapProps>(function LiveMap(
       reported = true;
       const msg = (e?.error as { message?: string } | undefined)?.message ?? "";
       console.error("MapLibre error:", msg || e);
-      setError(
-        /unauthorized|forbidden|401|403|key/i.test(msg)
-          ? "Map failed to load: the MapTiler key is invalid, missing, or not authorized for this domain."
-          : "Map failed to load. Check your network connection and try again."
-      );
+      setError("Map failed to load. Check your network connection and try again.");
     });
 
     map.on("load", () => onLoad?.(map));
