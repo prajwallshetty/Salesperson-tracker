@@ -28,8 +28,9 @@ const upload = multer({
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { search, category, isActive, page = "1", pageSize = "20" } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (search) where.OR = [{ name: { contains: search, mode: "insensitive" } }, { sku: { contains: search, mode: "insensitive" } }];
     if (category) where.category = category;
     if (isActive !== undefined) where.isActive = isActive === "true";
@@ -45,8 +46,12 @@ router.get(
 
 router.get(
   "/categories",
-  asyncHandler(async (_req, res) => {
-    const rows = await prisma.product.findMany({ distinct: ["category"], select: { category: true } });
+  asyncHandler(async (req, res) => {
+    const rows = await prisma.product.findMany({
+      where: { tenantId: req.auth!.tenantId },
+      distinct: ["category"],
+      select: { category: true },
+    });
     res.json(rows.map((r) => r.category));
   })
 );
@@ -67,10 +72,11 @@ router.post(
   "/",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = productSchema.parse(req.body);
-    const existing = await prisma.product.findUnique({ where: { sku: data.sku } });
+    const existing = await prisma.product.findUnique({ where: { tenantId_sku: { tenantId, sku: data.sku } } });
     if (existing) return res.status(409).json({ error: "SKU already exists" });
-    const product = await prisma.product.create({ data });
+    const product = await prisma.product.create({ data: { ...data, tenantId } });
     res.status(201).json(product);
   })
 );
@@ -79,7 +85,10 @@ router.patch(
   "/:id",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = productSchema.partial().parse(req.body);
+    const existing = await prisma.product.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const product = await prisma.product.update({ where: { id: req.params.id }, data });
     res.json(product);
   })
@@ -89,7 +98,10 @@ router.patch(
   "/:id/status",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
+    const existing = await prisma.product.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const product = await prisma.product.update({ where: { id: req.params.id }, data: { isActive } });
     res.json(product);
   })
@@ -100,6 +112,8 @@ router.post(
   requireRole("ADMIN"),
   upload.single("image"),
   asyncHandler(async (req, res) => {
+    const existing = await prisma.product.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     const imageUrl = `/uploads/${req.file.filename}`;
     const product = await prisma.product.update({ where: { id: req.params.id }, data: { imageUrl } });
@@ -111,6 +125,8 @@ router.delete(
   "/:id",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const existing = await prisma.product.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     await prisma.product.delete({ where: { id: req.params.id } });
     res.status(204).end();
   })

@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { hashPassword } from "../lib/auth";
 import { SAFE_USER_SELECT } from "../lib/selects";
 import { generateUniqueAccessCode } from "../lib/accessCode";
+import { assertCanAddSalesperson } from "../lib/entitlements";
 
 export interface CreateSalespersonAccountInput {
   name: string;
@@ -17,9 +18,15 @@ export interface CreateSalespersonAccountInput {
  * Creates a User (role SALESPERSON) plus its linked Salesperson record. Shared by
  * POST /api/salespersons (the original salesperson-creation endpoint) and
  * POST /api/users (admin user management, when role === "SALESPERSON") so the two never drift.
- * Throws (with an http `status`) if the email is already taken.
+ * Throws (with an http `status`) if the email is already taken or the tenant's plan is full.
  */
-export async function createSalespersonAccount(input: CreateSalespersonAccountInput) {
+export async function createSalespersonAccount(tenantId: string, input: CreateSalespersonAccountInput) {
+  // Enforced here (not just hidden in the UI) so no endpoint can create a salesperson beyond
+  // the tenant's plan limit - see lib/entitlements.ts. PlanLimitError carries its own http
+  // status (402); asyncHandler's error middleware uses it the same way it already does for the
+  // 409 below.
+  await assertCanAddSalesperson(tenantId);
+
   const email = input.email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw Object.assign(new Error("Email already in use"), { status: 409 });
@@ -27,6 +34,7 @@ export async function createSalespersonAccount(input: CreateSalespersonAccountIn
   const passwordHash = await hashPassword(input.password);
   const user = await prisma.user.create({
     data: {
+      tenantId,
       name: input.name,
       email,
       passwordHash,
@@ -37,6 +45,7 @@ export async function createSalespersonAccount(input: CreateSalespersonAccountIn
   const accessCode = await generateUniqueAccessCode();
   const salesperson = await prisma.salesperson.create({
     data: {
+      tenantId,
       userId: user.id,
       employeeCode: input.employeeCode,
       territoryId: input.territoryId || null,

@@ -12,8 +12,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { salespersonId, customerId, from, to } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (customerId) where.customerId = customerId;
@@ -42,10 +43,19 @@ const createSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = createSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+
+    const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId } });
+    if (!customer) return res.status(400).json({ error: "Customer not found" });
+    if (data.orderId) {
+      const order = await prisma.order.findFirst({ where: { id: data.orderId, tenantId } });
+      if (!order) return res.status(400).json({ error: "Order not found" });
+    }
+
     const collection = await prisma.collection.create({
-      data: { ...data, salespersonId },
+      data: { ...data, tenantId, salespersonId },
       include: { customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
 
@@ -57,6 +67,7 @@ router.post(
     }
 
     await notifyAdmins(
+      tenantId,
       "COLLECTION_RECEIVED",
       "Payment collected",
       `${collection.salesperson.user.name} collected ${data.amount} from ${collection.customer.name}`,

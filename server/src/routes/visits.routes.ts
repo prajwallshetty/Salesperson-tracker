@@ -6,7 +6,6 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
 import { notifyAdmins } from "../services/notifications";
-import { haversineKm } from "../utils/geo";
 import { SAFE_USER_SELECT } from "../lib/selects";
 
 const router = Router();
@@ -31,6 +30,7 @@ const upload = multer({
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const {
       status,
       outcome,
@@ -44,7 +44,7 @@ router.get(
       page,
       pageSize,
     } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (status) where.status = status;
@@ -98,10 +98,18 @@ const createSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = createSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+    const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId } });
+    if (!customer) return res.status(400).json({ error: "Customer not found" });
+    if (req.auth!.role === "ADMIN") {
+      const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
+      if (!owner) return res.status(400).json({ error: "Salesperson not found" });
+    }
     const visit = await prisma.visit.create({
       data: {
+        tenantId,
         salespersonId,
         customerId: data.customerId,
         plannedAt: data.plannedAt ? new Date(data.plannedAt) : undefined,
@@ -116,9 +124,10 @@ router.post(
 router.post(
   "/:id/checkin",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { lat, lng } = z.object({ lat: z.number(), lng: z.number() }).parse(req.body);
 
-    const existing = await prisma.visit.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.visit.findFirst({ where: { id: req.params.id, tenantId } });
     if (!existing) return res.status(404).json({ error: "Visit not found" });
     if (req.auth!.role === "SALESPERSON" && existing.salespersonId !== req.auth!.salespersonId) {
       return res.status(403).json({ error: "This visit does not belong to you" });
@@ -141,6 +150,7 @@ router.post(
     });
 
     await notifyAdmins(
+      tenantId,
       "CUSTOMER_REACHED",
       "Salesperson reached customer",
       `${visit.salesperson.user.name} checked in at ${visit.customer.name}`,
@@ -154,6 +164,7 @@ router.post(
 router.post(
   "/:id/checkout",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { lat, lng, notes, outcome, followUpDate, photoUrls } = z
       .object({
         lat: z.number(),
@@ -167,7 +178,7 @@ router.post(
       })
       .parse(req.body);
 
-    const existing = await prisma.visit.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.visit.findFirst({ where: { id: req.params.id, tenantId } });
     if (!existing) return res.status(404).json({ error: "Visit not found" });
     if (req.auth!.role === "SALESPERSON" && existing.salespersonId !== req.auth!.salespersonId) {
       return res.status(403).json({ error: "This visit does not belong to you" });
@@ -205,6 +216,7 @@ router.post(
     if (followUpDate) {
       await prisma.followUp.create({
         data: {
+          tenantId,
           salespersonId: visit.salespersonId,
           customerId: visit.customerId,
           dueDate: new Date(followUpDate),
@@ -214,6 +226,7 @@ router.post(
     }
 
     await notifyAdmins(
+      tenantId,
       "VISIT_COMPLETED",
       "Customer visit completed",
       `${visit.salesperson.user.name} completed a visit to ${visit.customer.name}`,
@@ -228,10 +241,13 @@ router.post(
   "/:id/photos",
   upload.array("photos", 5),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const visit = await prisma.visit.findFirst({ where });
+    if (!visit) return res.status(404).json({ error: "Visit not found" });
     const files = (req.files as Express.Multer.File[]) || [];
     const urls = files.map((f) => `/uploads/${f.filename}`);
-    const visit = await prisma.visit.findUnique({ where: { id: req.params.id } });
-    if (!visit) return res.status(404).json({ error: "Visit not found" });
     const updated = await prisma.visit.update({
       where: { id: req.params.id },
       data: { photoUrls: [...visit.photoUrls, ...urls] },
@@ -243,6 +259,7 @@ router.post(
 router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = z
       .object({
         notes: z.string().optional(),
@@ -250,6 +267,10 @@ router.patch(
         followUpDate: z.string().optional(),
       })
       .parse(req.body);
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.visit.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const visit = await prisma.visit.update({
       where: { id: req.params.id },
       data: {

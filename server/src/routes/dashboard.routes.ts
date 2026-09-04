@@ -9,7 +9,8 @@ router.use(requireAuth, requireRole("ADMIN"));
 
 router.get(
   "/summary",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const now = new Date();
     const [
       totalSalespersons,
@@ -22,15 +23,15 @@ router.get(
       todayCollectionsAgg,
       activeTargets,
     ] = await Promise.all([
-      prisma.salesperson.count(),
-      prisma.salesperson.count({ where: { status: "ACTIVE" } }),
-      prisma.order.aggregate({ where: { createdAt: { gte: startOfDay(now), lte: endOfDay(now) } }, _sum: { grandTotal: true } }),
-      prisma.order.aggregate({ where: { createdAt: { gte: startOfMonth(now), lte: endOfMonth(now) } }, _sum: { grandTotal: true } }),
-      prisma.visit.count({ where: { createdAt: { gte: startOfDay(now), lte: endOfDay(now) } } }),
-      prisma.followUp.count({ where: { status: "PENDING" } }),
-      prisma.order.count({ where: { createdAt: { gte: startOfDay(now), lte: endOfDay(now) } } }),
-      prisma.collection.aggregate({ where: { collectedAt: { gte: startOfDay(now), lte: endOfDay(now) } }, _sum: { amount: true } }),
-      prisma.target.findMany({ where: { periodStart: { lte: now }, periodEnd: { gte: now } } }),
+      prisma.salesperson.count({ where: { tenantId } }),
+      prisma.salesperson.count({ where: { tenantId, status: "ACTIVE" } }),
+      prisma.order.aggregate({ where: { tenantId, createdAt: { gte: startOfDay(now), lte: endOfDay(now) } }, _sum: { grandTotal: true } }),
+      prisma.order.aggregate({ where: { tenantId, createdAt: { gte: startOfMonth(now), lte: endOfMonth(now) } }, _sum: { grandTotal: true } }),
+      prisma.visit.count({ where: { tenantId, createdAt: { gte: startOfDay(now), lte: endOfDay(now) } } }),
+      prisma.followUp.count({ where: { tenantId, status: "PENDING" } }),
+      prisma.order.count({ where: { tenantId, createdAt: { gte: startOfDay(now), lte: endOfDay(now) } } }),
+      prisma.collection.aggregate({ where: { tenantId, collectedAt: { gte: startOfDay(now), lte: endOfDay(now) } }, _sum: { amount: true } }),
+      prisma.target.findMany({ where: { tenantId, periodStart: { lte: now }, periodEnd: { gte: now } } }),
     ]);
 
     const targetAmount = activeTargets.reduce((s, t) => s + t.targetAmount, 0);
@@ -38,14 +39,14 @@ router.get(
 
     const topPerformersRaw = await prisma.order.groupBy({
       by: ["salespersonId"],
-      where: { createdAt: { gte: startOfMonth(now), lte: endOfMonth(now) } },
+      where: { tenantId, createdAt: { gte: startOfMonth(now), lte: endOfMonth(now) } },
       _sum: { grandTotal: true },
       orderBy: { _sum: { grandTotal: "desc" } },
       take: 5,
     });
     const topSpIds = topPerformersRaw.map((t) => t.salespersonId);
     const topSps = await prisma.salesperson.findMany({
-      where: { id: { in: topSpIds } },
+      where: { id: { in: topSpIds }, tenantId },
       include: { user: { select: { name: true, avatarUrl: true } } },
     });
     const topPerformers = topPerformersRaw.map((t) => {
@@ -73,8 +74,9 @@ router.get(
 router.get(
   "/salespersons",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { status } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (status && status !== "ALL") where.status = status;
     const items = await prisma.salesperson.findMany({
       where,
@@ -88,12 +90,13 @@ router.get(
 router.get(
   "/sales",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const range = (req.query.range as string) || "today";
     const now = new Date();
     const gte = range === "month" ? startOfMonth(now) : startOfDay(now);
     const lte = range === "month" ? endOfMonth(now) : endOfDay(now);
     const orders = await prisma.order.findMany({
-      where: { createdAt: { gte, lte } },
+      where: { tenantId, createdAt: { gte, lte } },
       include: { customer: true, salesperson: { include: { user: { select: { name: true } } } } },
       orderBy: { createdAt: "desc" },
     });
@@ -104,12 +107,13 @@ router.get(
 router.get(
   "/visits",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const range = (req.query.range as string) || "today";
     const now = new Date();
     const gte = range === "month" ? startOfMonth(now) : startOfDay(now);
     const lte = range === "month" ? endOfMonth(now) : endOfDay(now);
     const visits = await prisma.visit.findMany({
-      where: { createdAt: { gte, lte } },
+      where: { tenantId, createdAt: { gte, lte } },
       include: { customer: true, salesperson: { include: { user: { select: { name: true } } } } },
       orderBy: { createdAt: "desc" },
     });
@@ -120,8 +124,9 @@ router.get(
 router.get(
   "/followups",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const status = (req.query.status as string) || "PENDING";
-    const where: any = {};
+    const where: any = { tenantId };
     if (status === "OVERDUE") {
       where.status = "PENDING";
       where.dueDate = { lt: new Date() };
@@ -140,12 +145,13 @@ router.get(
 router.get(
   "/orders",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const range = (req.query.range as string) || "today";
     const now = new Date();
     const gte = range === "month" ? startOfMonth(now) : startOfDay(now);
     const lte = range === "month" ? endOfMonth(now) : endOfDay(now);
     const orders = await prisma.order.findMany({
-      where: { createdAt: { gte, lte } },
+      where: { tenantId, createdAt: { gte, lte } },
       include: { customer: true, items: { include: { product: true } }, salesperson: { include: { user: { select: { name: true } } } } },
       orderBy: { createdAt: "desc" },
     });
@@ -156,12 +162,13 @@ router.get(
 router.get(
   "/collections",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const range = (req.query.range as string) || "today";
     const now = new Date();
     const gte = range === "month" ? startOfMonth(now) : startOfDay(now);
     const lte = range === "month" ? endOfMonth(now) : endOfDay(now);
     const collections = await prisma.collection.findMany({
-      where: { collectedAt: { gte, lte } },
+      where: { tenantId, collectedAt: { gte, lte } },
       include: { customer: true, salesperson: { include: { user: { select: { name: true } } } } },
       orderBy: { collectedAt: "desc" },
     });
@@ -171,11 +178,12 @@ router.get(
 
 router.get(
   "/targets",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const now = new Date();
     const defaultRange = { gte: startOfMonth(now), lte: endOfMonth(now) };
     const salespersons = await prisma.salesperson.findMany({
-      where: { status: "ACTIVE" },
+      where: { tenantId, status: "ACTIVE" },
       include: { user: { select: { name: true, avatarUrl: true } }, targets: { where: { periodStart: { lte: now }, periodEnd: { gte: now } } } },
     });
 
@@ -199,7 +207,7 @@ router.get(
       Array.from(rangeGroups.values()).map(async (group) => {
         const grouped = await prisma.order.groupBy({
           by: ["salespersonId"],
-          where: { salespersonId: { in: group.salespersonIds }, createdAt: { gte: group.gte, lte: group.lte } },
+          where: { tenantId, salespersonId: { in: group.salespersonIds }, createdAt: { gte: group.gte, lte: group.lte } },
           _sum: { grandTotal: true },
         });
         for (const row of grouped) achievedMap.set(row.salespersonId, row._sum.grandTotal ?? 0);
@@ -225,20 +233,21 @@ router.get(
 router.get(
   "/top-performers",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const now = new Date();
     const range = (req.query.range as string) || "month";
     const gte = range === "today" ? startOfDay(now) : startOfMonth(now);
     const lte = range === "today" ? endOfDay(now) : endOfMonth(now);
     const grouped = await prisma.order.groupBy({
       by: ["salespersonId"],
-      where: { createdAt: { gte, lte } },
+      where: { tenantId, createdAt: { gte, lte } },
       _sum: { grandTotal: true },
       _count: true,
       orderBy: { _sum: { grandTotal: "desc" } },
       take: 10,
     });
     const sps = await prisma.salesperson.findMany({
-      where: { id: { in: grouped.map((g) => g.salespersonId) } },
+      where: { id: { in: grouped.map((g) => g.salespersonId) }, tenantId },
       include: { user: { select: { name: true, avatarUrl: true } } },
     });
     const result = grouped.map((g) => {

@@ -27,9 +27,10 @@ function isEffectivelyOnline(sp: { isOnline: boolean; lastSeenAt: Date | null })
 router.get(
   "/live",
   requireRole("ADMIN"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const salespersons = await prisma.salesperson.findMany({
-      where: { status: "ACTIVE" },
+      where: { tenantId, status: "ACTIVE" },
       include: {
         user: { select: { name: true, avatarUrl: true } },
         territory: true,
@@ -42,6 +43,8 @@ router.get(
 
     // Batch the per-salesperson stats into one query each (grouped by salespersonId) instead of
     // firing 4 queries per salesperson - this endpoint is polled continuously by the live map.
+    // `ids` already only contains this tenant's salespersons, so these grouped queries are
+    // transitively tenant-scoped without needing their own tenantId filter.
     const [visitCounts, inProgressVisits, orderSums, collectionSums, latestPings] = await Promise.all([
       prisma.visit.groupBy({
         by: ["salespersonId"],
@@ -124,9 +127,13 @@ router.get(
 router.get(
   "/:salespersonId/route",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.salespersonId) {
       return res.status(403).json({ error: "Forbidden" });
     }
+    const salesperson = await prisma.salesperson.findFirst({ where: { id: req.params.salespersonId, tenantId } });
+    if (!salesperson) return res.status(404).json({ error: "Not found" });
+
     const dateStr = (req.query.date as string) || new Date().toISOString().slice(0, 10);
     const date = new Date(dateStr);
     const from = startOfDay(date);
@@ -134,11 +141,11 @@ router.get(
 
     const [points, visits] = await Promise.all([
       prisma.locationPing.findMany({
-        where: { salespersonId: req.params.salespersonId, recordedAt: { gte: from, lte: to } },
+        where: { tenantId, salespersonId: req.params.salespersonId, recordedAt: { gte: from, lte: to } },
         orderBy: { recordedAt: "asc" },
       }),
       prisma.visit.findMany({
-        where: { salespersonId: req.params.salespersonId, createdAt: { gte: from, lte: to } },
+        where: { tenantId, salespersonId: req.params.salespersonId, createdAt: { gte: from, lte: to } },
         include: { customer: true },
         orderBy: { createdAt: "asc" },
       }),
@@ -181,7 +188,7 @@ router.post(
       .parse(req.body);
 
     const salespersonId = req.auth!.salespersonId!;
-    const result = await recordLocationPing(salespersonId, { lat, lng, speed, accuracy, heading, recordedAt });
+    const result = await recordLocationPing(req.auth!.tenantId, salespersonId, { lat, lng, speed, accuracy, heading, recordedAt });
     res.status(201).json(result);
   })
 );
@@ -190,6 +197,7 @@ router.post(
   "/field-work/start",
   requireRole("SALESPERSON"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { lat, lng } = z.object({ lat: z.number(), lng: z.number() }).parse(req.body);
     const salespersonId = req.auth!.salespersonId!;
     const now = new Date();
@@ -211,11 +219,12 @@ router.post(
 
     await prisma.attendance.upsert({
       where: { salespersonId_date: { salespersonId, date: startOfDay(now) } },
-      create: { salespersonId, date: startOfDay(now), checkInAt: now, checkInLat: lat, checkInLng: lng },
+      create: { tenantId, salespersonId, date: startOfDay(now), checkInAt: now, checkInLat: lat, checkInLng: lng },
       update: { checkInAt: now, checkInLat: lat, checkInLng: lng },
     });
 
     await notifyAdmins(
+      tenantId,
       "FIELD_WORK_STARTED",
       "Field work started",
       `${sp.user.name} started field work`,
@@ -223,7 +232,7 @@ router.post(
     );
 
     try {
-      getIO().to("admins").emit("salesperson:status", { salespersonId, isOnline: true, fieldWorkStatus: "ACTIVE" });
+      getIO().to(`admins:${tenantId}`).emit("salesperson:status", { salespersonId, isOnline: true, fieldWorkStatus: "ACTIVE" });
     } catch {
       /* socket not ready */
     }
@@ -236,6 +245,7 @@ router.post(
   "/field-work/end",
   requireRole("SALESPERSON"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { lat, lng } = z.object({ lat: z.number(), lng: z.number() }).parse(req.body);
     const salespersonId = req.auth!.salespersonId!;
     const now = new Date();
@@ -263,6 +273,7 @@ router.post(
     await prisma.attendance.upsert({
       where: { salespersonId_date: { salespersonId, date: startOfDay(now) } },
       create: {
+        tenantId,
         salespersonId,
         date: startOfDay(now),
         checkOutAt: now,
@@ -274,10 +285,10 @@ router.post(
       update: { checkOutAt: now, checkOutLat: lat, checkOutLng: lng, totalDistanceKm: sp.todayDistanceKm, totalDurationMin: durationMin },
     });
 
-    await notifyAdmins("FIELD_WORK_ENDED", "Field work ended", `${sp.user.name} ended field work`, { salespersonId });
+    await notifyAdmins(tenantId, "FIELD_WORK_ENDED", "Field work ended", `${sp.user.name} ended field work`, { salespersonId });
 
     try {
-      getIO().to("admins").emit("salesperson:status", { salespersonId, isOnline: false, fieldWorkStatus: "ENDED" });
+      getIO().to(`admins:${tenantId}`).emit("salesperson:status", { salespersonId, isOnline: false, fieldWorkStatus: "ENDED" });
     } catch {
       /* socket not ready */
     }
@@ -295,7 +306,7 @@ interface PingInput {
   recordedAt?: string;
 }
 
-export async function recordLocationPing(salespersonId: string, input: PingInput) {
+export async function recordLocationPing(tenantId: string, salespersonId: string, input: PingInput) {
   const recordedAt = input.recordedAt ? new Date(input.recordedAt) : new Date();
 
   const last = await prisma.locationPing.findFirst({
@@ -320,6 +331,7 @@ export async function recordLocationPing(salespersonId: string, input: PingInput
   const [ping, sp] = await Promise.all([
     prisma.locationPing.create({
       data: {
+        tenantId,
         salespersonId,
         lat: input.lat,
         lng: input.lng,
@@ -345,7 +357,7 @@ export async function recordLocationPing(salespersonId: string, input: PingInput
 
   try {
     getIO()
-      .to("admins")
+      .to(`admins:${tenantId}`)
       .emit("location:update", {
         salespersonId,
         name: sp.user.name,

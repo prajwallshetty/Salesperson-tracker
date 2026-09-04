@@ -14,8 +14,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { search, isActive } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (search) where.name = { contains: search, mode: "insensitive" };
     if (isActive !== undefined) where.isActive = isActive === "true";
     const categories = await prisma.category.findMany({ where, orderBy: { name: "asc" } });
@@ -24,7 +25,7 @@ router.get(
     // of one per category.
     const counts = await prisma.product.groupBy({
       by: ["category"],
-      where: { category: { in: categories.map((c) => c.name) } },
+      where: { tenantId, category: { in: categories.map((c) => c.name) } },
       _count: true,
     });
     const countMap = new Map(counts.map((c) => [c.category, c._count]));
@@ -35,9 +36,10 @@ router.get(
 router.get(
   "/:id/products",
   asyncHandler(async (req, res) => {
-    const category = await prisma.category.findUnique({ where: { id: req.params.id } });
+    const tenantId = req.auth!.tenantId;
+    const category = await prisma.category.findFirst({ where: { id: req.params.id, tenantId } });
     if (!category) return res.status(404).json({ error: "Not found" });
-    const products = await prisma.product.findMany({ where: { category: category.name }, orderBy: { name: "asc" } });
+    const products = await prisma.product.findMany({ where: { tenantId, category: category.name }, orderBy: { name: "asc" } });
     res.json(products);
   })
 );
@@ -51,10 +53,11 @@ router.post(
   "/",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = categorySchema.parse(req.body);
-    const existing = await prisma.category.findUnique({ where: { name: data.name } });
+    const existing = await prisma.category.findUnique({ where: { tenantId_name: { tenantId, name: data.name } } });
     if (existing) return res.status(409).json({ error: "Category name already exists" });
-    const category = await prisma.category.create({ data });
+    const category = await prisma.category.create({ data: { ...data, tenantId } });
     res.status(201).json(category);
   })
 );
@@ -63,7 +66,10 @@ router.patch(
   "/:id",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = categorySchema.partial().parse(req.body);
+    const existing = await prisma.category.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const category = await prisma.category.update({ where: { id: req.params.id }, data });
     res.json(category);
   })
@@ -73,7 +79,10 @@ router.patch(
   "/:id/status",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
+    const existing = await prisma.category.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const category = await prisma.category.update({ where: { id: req.params.id }, data: { isActive } });
     res.json(category);
   })
@@ -83,9 +92,10 @@ router.delete(
   "/:id",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
-    const category = await prisma.category.findUnique({ where: { id: req.params.id } });
+    const tenantId = req.auth!.tenantId;
+    const category = await prisma.category.findFirst({ where: { id: req.params.id, tenantId } });
     if (!category) return res.status(404).json({ error: "Not found" });
-    const productCount = await prisma.product.count({ where: { category: category.name } });
+    const productCount = await prisma.product.count({ where: { tenantId, category: category.name } });
     if (productCount > 0) {
       return res.status(409).json({ error: `Cannot delete: ${productCount} product(s) still reference this category` });
     }

@@ -10,11 +10,12 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { productId, territoryId, customerId, isActive, page = "1", pageSize = "20" } = req.query as Record<
       string,
       string
     >;
-    const where: any = {};
+    const where: any = { tenantId };
     if (productId) where.productId = productId;
     if (territoryId) where.territoryId = territoryId;
     if (customerId) where.customerId = customerId;
@@ -39,8 +40,8 @@ router.get(
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const row = await prisma.priceList.findUnique({
-      where: { id: req.params.id },
+    const row = await prisma.priceList.findFirst({
+      where: { id: req.params.id, tenantId: req.auth!.tenantId },
       include: { product: true, territory: true, customer: true },
     });
     if (!row) return res.status(404).json({ error: "Not found" });
@@ -63,12 +64,14 @@ router.post(
   "/",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = priceListSchema.parse(req.body);
-    const product = await prisma.product.findUnique({ where: { id: data.productId } });
+    const product = await prisma.product.findFirst({ where: { id: data.productId, tenantId } });
     if (!product) return res.status(400).json({ error: "Product not found" });
 
     const priceList = await prisma.priceList.create({
       data: {
+        tenantId,
         productId: data.productId,
         territoryId: data.territoryId || null,
         customerId: data.customerId || null,
@@ -90,7 +93,10 @@ router.patch(
   "/:id",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = updateSchema.parse(req.body);
+    const existing = await prisma.priceList.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const priceList = await prisma.priceList.update({
       where: { id: req.params.id },
       data: {
@@ -110,6 +116,8 @@ router.patch(
   "/:id/deactivate",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const existing = await prisma.priceList.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const priceList = await prisma.priceList.update({ where: { id: req.params.id }, data: { isActive: false } });
     res.json(priceList);
   })

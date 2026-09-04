@@ -12,6 +12,20 @@ enum Role {
   SALESPERSON
 }
 
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
+}
+
 enum EmploymentStatus {
   ACTIVE
   INACTIVE
@@ -95,8 +109,92 @@ enum NotificationType {
   COLLECTION_RECEIVED
 }
 
+// A tenant is one customer company/organization using SalesGrid (e.g. "Prestige", "ABC
+// Corporation"). Every tenant-owned row across the schema carries a `tenantId` scoping it to
+// exactly one tenant - see the individual models below. `slug` is a stable, admin-chosen
+// identifier (never the mutable display `name`) reserved for an optional future
+// app.salesgrid.live/<slug> workspace URL; nothing currently derives tenant identity from it -
+// the authenticated user's own tenantId (never a client-supplied value) is always the source
+// of truth for tenant scoping.
+model Tenant {
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  logoUrl   String?
+  status    TenantStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  users        User[]
+  subscription Subscription?
+
+  @@index([status])
+}
+
+// Platform-level SalesGrid staff (not a tenant user, not a `Role`) who administers tenants,
+// plans and subscriptions across the whole platform. Deliberately a separate model/table with
+// its own login and JWT (see routes/platform.routes.ts, middleware/platformAuth.ts) rather than
+// `User` with some special role, so a platform operator can never be confused with - or
+// accidentally granted the data access of - a tenant's own ADMIN.
+model PlatformAdmin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// The catalog of plans a tenant can subscribe to (STARTER/GROWTH/.../ENTERPRISE, plus an
+// internal LEGACY plan assigned to pre-existing data during the multi-tenant migration - see
+// scripts/seed-subscription-plans.ts). Global, not tenant-owned: every tenant reads the same
+// plan catalog. `features` is a flat map of feature-key -> boolean/limit consulted by
+// lib/entitlements.ts instead of hard-coding plan checks at each call site.
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  name            String
+  monthlyPrice    Float
+  annualPrice     Float?
+  maxSalespersons Int
+  maxAdmins       Int
+  features        Json     @default("{}")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+// One tenant's subscription to a plan. Payment-provider-specific fields (billingProvider/
+// providerCustomerId/providerSubscriptionId) are nullable and provider-agnostic by design - see
+// services/billing.ts - so wiring in a real processor (Razorpay/Stripe) later only touches that
+// service layer, not every place a subscription is read.
+model Subscription {
+  id                     String             @id @default(cuid())
+  tenantId               String             @unique
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId                 String
+  plan                   SubscriptionPlan   @relation(fields: [planId], references: [id])
+  status                 SubscriptionStatus @default(TRIALING)
+  billingProvider        String?
+  providerCustomerId     String?
+  providerSubscriptionId String?
+  currentPeriodStart     DateTime           @default(now())
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([planId])
+  @@index([status])
+}
+
 model User {
   id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   email        String   @unique
   passwordHash String
   role         Role
@@ -107,44 +205,61 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  salesperson Salesperson?
+  salesperson   Salesperson?
   notifications Notification[]
 
   @@index([role])
+  @@index([tenantId])
 }
 
 model Territory {
   id          String   @id @default(cuid())
-  name        String   @unique
+  // Tenant-owned - scoped by tenantId like every model below. Not a full Prisma `@relation` to
+  // Tenant (a plain indexed scalar instead): application code only ever filters
+  // `where: { tenantId }`, never navigates `territory.tenant`, and adding a real relation here
+  // (and on every other tenant-owned model) would require a matching back-reference array field
+  // on Tenant for each one - see User/Subscription above for the two models that genuinely do
+  // need bidirectional navigation. Referential integrity is still enforced at the database level
+  // via a foreign key added in the migration SQL.
+  tenantId    String
+  name        String
   description String?
   createdAt   DateTime @default(now())
 
   salespersons Salesperson[]
   customers    Customer[]
   priceLists   PriceList[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model Salesperson {
-  id               String            @id @default(cuid())
-  userId           String            @unique
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  employeeCode     String            @unique
-  status           EmploymentStatus  @default(ACTIVE)
+  id               String           @id @default(cuid())
+  // Denormalized from user.tenantId (a Salesperson can never belong to a different tenant than
+  // its own User) so every query here can filter `where: { tenantId }` directly without an
+  // extra join through User - see Territory above for why this is a plain scalar, not a
+  // `@relation`.
+  tenantId         String
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode     String
+  status           EmploymentStatus @default(ACTIVE)
   territoryId      String?
-  territory        Territory?        @relation(fields: [territoryId], references: [id])
+  territory        Territory?       @relation(fields: [territoryId], references: [id])
   managerId        String?
-  manager          Salesperson?      @relation("ManagerReports", fields: [managerId], references: [id])
-  reports          Salesperson[]     @relation("ManagerReports")
-  joinedAt         DateTime          @default(now())
-  fieldWorkStatus  FieldWorkStatus   @default(NOT_STARTED)
+  manager          Salesperson?     @relation("ManagerReports", fields: [managerId], references: [id])
+  reports          Salesperson[]    @relation("ManagerReports")
+  joinedAt         DateTime         @default(now())
+  fieldWorkStatus  FieldWorkStatus  @default(NOT_STARTED)
   fieldWorkStartAt DateTime?
   fieldWorkEndAt   DateTime?
   lastSeenAt       DateTime?
   lastLat          Float?
   lastLng          Float?
   lastSpeed        Float?
-  isOnline         Boolean           @default(false)
-  todayDistanceKm  Float             @default(0)
+  isOnline         Boolean          @default(false)
+  todayDistanceKm  Float            @default(0)
 
   // Salesperson-app login uses a short access code instead of email/password (admin
   // accounts are unaffected - they still use the existing email/password flow). Stored
@@ -155,31 +270,34 @@ model Salesperson {
   // while offering no protection against the code being read from the admin UI anyway,
   // which the feature requires. Never returned from list/general salesperson endpoints -
   // only a dedicated admin-authorized endpoint exposes it.
-  accessCode        String?   @unique
-  accessCodeEnabled Boolean   @default(true)
+  accessCode           String?   @unique
+  accessCodeEnabled    Boolean   @default(true)
   accessCodeLastUsedAt DateTime?
 
-  customers      Customer[]
-  targets        Target[]
-  attendance     Attendance[]
-  visits         Visit[]
-  locationPings  LocationPing[]
-  leads          Lead[]
-  quotations     Quotation[]
-  orders         Order[]
-  collections    Collection[]
-  followUps      FollowUp[]
+  customers     Customer[]
+  targets       Target[]
+  attendance    Attendance[]
+  visits        Visit[]
+  locationPings LocationPing[]
+  leads         Lead[]
+  quotations    Quotation[]
+  orders        Order[]
+  collections   Collection[]
+  followUps     FollowUp[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([tenantId, employeeCode])
+  @@index([tenantId])
   @@index([territoryId])
   @@index([managerId])
   @@index([status])
 }
 
 model Customer {
-  id            String    @id @default(cuid())
+  id            String       @id @default(cuid())
+  tenantId      String
   name          String
   phone         String?
   email         String?
@@ -187,14 +305,14 @@ model Customer {
   lat           Float?
   lng           Float?
   territoryId   String?
-  territory     Territory? @relation(fields: [territoryId], references: [id])
+  territory     Territory?   @relation(fields: [territoryId], references: [id])
   salespersonId String?
   salesperson   Salesperson? @relation(fields: [salespersonId], references: [id])
-  fromLeadId    String?   @unique
-  fromLead      Lead?     @relation(fields: [fromLeadId], references: [id])
+  fromLeadId    String?      @unique
+  fromLead      Lead?        @relation(fields: [fromLeadId], references: [id])
   notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   visits      Visit[]
   quotations  Quotation[]
@@ -203,29 +321,33 @@ model Customer {
   followUps   FollowUp[]
   priceLists  PriceList[]
 
+  @@index([tenantId])
   @@index([salespersonId])
   @@index([territoryId])
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  name        String
-  sku         String   @unique
-  category    String
-  unit        String
-  price       Float
-  taxPercent  Float    @default(0)
-  discountPercent Float @default(0)
-  imageUrl    String?
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  sku             String
+  category        String
+  unit            String
+  price           Float
+  taxPercent      Float    @default(0)
+  discountPercent Float    @default(0)
+  imageUrl        String?
+  description     String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   quotationItems QuotationItem[]
   orderItems     OrderItem[]
   priceLists     PriceList[]
 
+  @@unique([tenantId, sku])
+  @@index([tenantId])
   @@index([isActive])
   @@index([category])
 }
@@ -237,11 +359,15 @@ model Product {
 // this table cannot change any existing product read/write behavior.
 model Category {
   id          String   @id @default(cuid())
-  name        String   @unique
+  tenantId    String
+  name        String
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 // Price overrides for a product, optionally scoped to a territory and/or a specific customer.
@@ -249,6 +375,7 @@ model Category {
 // (no customerId/territoryId) active override > Product.price/discountPercent/taxPercent.
 model PriceList {
   id              String     @id @default(cuid())
+  tenantId        String
   productId       String
   product         Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   territoryId     String?
@@ -264,6 +391,7 @@ model PriceList {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
+  @@index([tenantId])
   @@index([productId, isActive])
   @@index([territoryId])
   @@index([customerId])
@@ -271,6 +399,7 @@ model PriceList {
 
 model Target {
   id            String       @id @default(cuid())
+  tenantId      String
   salespersonId String
   salesperson   Salesperson  @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
   period        TargetPeriod
@@ -280,28 +409,32 @@ model Target {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
+  @@index([tenantId])
   @@index([salespersonId, period, periodStart])
 }
 
 model Attendance {
-  id            String       @id @default(cuid())
-  salespersonId String
-  salesperson   Salesperson  @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
-  date          DateTime
-  checkInAt     DateTime?
-  checkOutAt    DateTime?
-  checkInLat    Float?
-  checkInLng    Float?
-  checkOutLat   Float?
-  checkOutLng   Float?
-  totalDistanceKm Float @default(0)
-  totalDurationMin Int @default(0)
+  id               String      @id @default(cuid())
+  tenantId         String
+  salespersonId    String
+  salesperson      Salesperson @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  date             DateTime
+  checkInAt        DateTime?
+  checkOutAt       DateTime?
+  checkInLat       Float?
+  checkInLng       Float?
+  checkOutLat      Float?
+  checkOutLng      Float?
+  totalDistanceKm  Float       @default(0)
+  totalDurationMin Int         @default(0)
 
   @@unique([salespersonId, date])
+  @@index([tenantId])
 }
 
 model LocationPing {
   id            String      @id @default(cuid())
+  tenantId      String
   salespersonId String
   salesperson   Salesperson @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
   lat           Float
@@ -312,31 +445,34 @@ model LocationPing {
   recordedAt    DateTime
   createdAt     DateTime    @default(now())
 
+  @@index([tenantId])
   @@index([salespersonId, recordedAt])
 }
 
 model Visit {
-  id             String       @id @default(cuid())
-  salespersonId  String
-  salesperson    Salesperson  @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
-  customerId     String
-  customer       Customer     @relation(fields: [customerId], references: [id])
-  status         VisitStatus  @default(PLANNED)
-  plannedAt      DateTime?
-  checkInAt      DateTime?
-  checkInLat     Float?
-  checkInLng     Float?
-  checkOutAt     DateTime?
-  checkOutLat    Float?
-  checkOutLng    Float?
-  durationMin    Int?
-  notes          String?
-  photoUrls      String[]     @default([])
-  outcome        VisitOutcome?
-  followUpDate   DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id            String        @id @default(cuid())
+  tenantId      String
+  salespersonId String
+  salesperson   Salesperson   @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  status        VisitStatus   @default(PLANNED)
+  plannedAt     DateTime?
+  checkInAt     DateTime?
+  checkInLat    Float?
+  checkInLng    Float?
+  checkOutAt    DateTime?
+  checkOutLat   Float?
+  checkOutLng   Float?
+  durationMin   Int?
+  notes         String?
+  photoUrls     String[]      @default([])
+  outcome       VisitOutcome?
+  followUpDate  DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
+  @@index([tenantId])
   @@index([salespersonId, createdAt])
   @@index([customerId])
   @@index([status])
@@ -345,6 +481,7 @@ model Visit {
 
 model Lead {
   id            String      @id @default(cuid())
+  tenantId      String
   salespersonId String
   salesperson   Salesperson @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
   name          String
@@ -360,11 +497,13 @@ model Lead {
   followUps FollowUp[]
   customer  Customer?
 
+  @@index([tenantId])
   @@index([salespersonId, status])
 }
 
 model FollowUp {
   id            String         @id @default(cuid())
+  tenantId      String
   salespersonId String
   salesperson   Salesperson    @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
   leadId        String?
@@ -378,86 +517,94 @@ model FollowUp {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
+  @@index([tenantId])
   @@index([salespersonId, status, dueDate])
 }
 
 model Quotation {
-  id            String          @id @default(cuid())
-  number        String          @unique
-  salespersonId String
-  salesperson   Salesperson     @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
-  customerId    String
-  customer      Customer        @relation(fields: [customerId], references: [id])
-  status        DocumentStatus  @default(DRAFT)
-  subtotal      Float           @default(0)
-  taxTotal      Float           @default(0)
-  discountTotal Float           @default(0)
-  grandTotal    Float           @default(0)
-  notes         String?
-  convertedOrderId String?      @unique
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id               String         @id @default(cuid())
+  tenantId         String
+  number           String
+  salespersonId    String
+  salesperson      Salesperson    @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId       String
+  customer         Customer       @relation(fields: [customerId], references: [id])
+  status           DocumentStatus @default(DRAFT)
+  subtotal         Float          @default(0)
+  taxTotal         Float          @default(0)
+  discountTotal    Float          @default(0)
+  grandTotal       Float          @default(0)
+  notes            String?
+  convertedOrderId String?        @unique
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   items QuotationItem[]
-  order Order? @relation("QuotationOrder", fields: [convertedOrderId], references: [id])
+  order Order?          @relation("QuotationOrder", fields: [convertedOrderId], references: [id])
 
+  @@unique([tenantId, number])
+  @@index([tenantId])
   @@index([salespersonId, status])
 }
 
 model QuotationItem {
-  id          String    @id @default(cuid())
-  quotationId String
-  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id])
-  quantity    Float
-  unitPrice   Float
-  discountPercent Float @default(0)
-  taxPercent  Float @default(0)
-  lineTotal   Float
+  id              String    @id @default(cuid())
+  quotationId     String
+  quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  quantity        Float
+  unitPrice       Float
+  discountPercent Float     @default(0)
+  taxPercent      Float     @default(0)
+  lineTotal       Float
 }
 
 model Order {
-  id            String          @id @default(cuid())
-  number        String          @unique
-  salespersonId String
-  salesperson   Salesperson     @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
-  customerId    String
-  customer      Customer        @relation(fields: [customerId], references: [id])
-  status        DocumentStatus  @default(CONFIRMED)
-  subtotal      Float           @default(0)
-  taxTotal      Float           @default(0)
-  discountTotal Float           @default(0)
-  grandTotal    Float           @default(0)
-  amountCollected Float         @default(0)
-  notes         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id              String         @id @default(cuid())
+  tenantId        String
+  number          String
+  salespersonId   String
+  salesperson     Salesperson    @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer       @relation(fields: [customerId], references: [id])
+  status          DocumentStatus @default(CONFIRMED)
+  subtotal        Float          @default(0)
+  taxTotal        Float          @default(0)
+  discountTotal   Float          @default(0)
+  grandTotal      Float          @default(0)
+  amountCollected Float          @default(0)
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   items       OrderItem[]
   collections Collection[]
-  quotation   Quotation? @relation("QuotationOrder")
+  quotation   Quotation?   @relation("QuotationOrder")
 
+  @@unique([tenantId, number])
+  @@index([tenantId])
   @@index([salespersonId, createdAt])
   @@index([customerId])
   @@index([createdAt])
 }
 
 model OrderItem {
-  id          String  @id @default(cuid())
-  orderId     String
-  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product @relation(fields: [productId], references: [id])
-  quantity    Float
-  unitPrice   Float
-  discountPercent Float @default(0)
-  taxPercent  Float @default(0)
-  lineTotal   Float
+  id              String  @id @default(cuid())
+  orderId         String
+  order           Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product @relation(fields: [productId], references: [id])
+  quantity        Float
+  unitPrice       Float
+  discountPercent Float   @default(0)
+  taxPercent      Float   @default(0)
+  lineTotal       Float
 }
 
 model Collection {
   id            String           @id @default(cuid())
+  tenantId      String
   salespersonId String
   salesperson   Salesperson      @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
   customerId    String
@@ -469,6 +616,7 @@ model Collection {
   notes         String?
   collectedAt   DateTime         @default(now())
 
+  @@index([tenantId])
   @@index([salespersonId, collectedAt])
   @@index([collectedAt])
 }

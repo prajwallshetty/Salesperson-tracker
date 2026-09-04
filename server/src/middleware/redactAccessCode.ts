@@ -17,6 +17,12 @@ import { Request, Response, NextFunction } from "express";
  */
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
+  // Date (every createdAt/updatedAt/checkInAt/etc. field in every response) has no enumerable
+  // own properties, so walking it with Object.entries below would silently flatten it to `{}`
+  // instead of leaving it alone - this bit every single response before being caught. Anything
+  // else that isn't a plain object (rare here, but e.g. a Buffer) gets the same pass-through.
+  if (value instanceof Date) return value;
+  if (value && typeof value === "object" && value.constructor !== Object) return value;
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {

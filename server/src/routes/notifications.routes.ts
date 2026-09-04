@@ -24,6 +24,8 @@ router.get(
 router.patch(
   "/:id/read",
   asyncHandler(async (req, res) => {
+    const existing = await prisma.notification.findFirst({ where: { id: req.params.id, userId: req.auth!.userId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const notification = await prisma.notification.update({
       where: { id: req.params.id },
       data: { isRead: true },

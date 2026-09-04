@@ -11,6 +11,7 @@ interface SocketData {
   userId: string;
   role: "ADMIN" | "SALESPERSON";
   salespersonId?: string;
+  tenantId: string;
 }
 
 // Sockets don't go through Express's middleware chain, so cookie-parser (mounted on `app`) never
@@ -38,12 +39,17 @@ export function registerLocationSocket(io: Server) {
       const token = extractToken(socket);
       if (!token) return next(new Error("Missing auth token"));
       const payload = verifyToken(token);
-      const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { isActive: true } });
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { isActive: true, tenant: { select: { status: true } } },
+      });
       if (!user || !user.isActive) return next(new Error("Account is deactivated"));
+      if (user.tenant.status === "SUSPENDED") return next(new Error("Workspace is suspended"));
       (socket.data as SocketData) = {
         userId: payload.userId,
         role: payload.role,
         salespersonId: payload.salespersonId,
+        tenantId: payload.tenantId,
       };
       next();
     } catch {
@@ -56,8 +62,10 @@ export function registerLocationSocket(io: Server) {
 
     socket.join(`user:${data.userId}`);
 
+    // Scoped per tenant - an admin must only ever receive live-tracking/notification broadcasts
+    // for their own workspace, never another tenant's.
     if (data.role === "ADMIN") {
-      socket.join("admins");
+      socket.join(`admins:${data.tenantId}`);
     }
 
     if (data.role === "SALESPERSON" && data.salespersonId) {
@@ -69,7 +77,7 @@ export function registerLocationSocket(io: Server) {
 
       socket.on("location:update", async (payload) => {
         try {
-          await recordLocationPing(data.salespersonId!, payload);
+          await recordLocationPing(data.tenantId, data.salespersonId!, payload);
         } catch (err) {
           socket.emit("location:error", { message: (err as Error).message });
         }
@@ -82,7 +90,7 @@ export function registerLocationSocket(io: Server) {
               where: { id: data.salespersonId },
               data: { isOnline: false },
             });
-            io.to("admins").emit("salesperson:status", {
+            io.to(`admins:${data.tenantId}`).emit("salesperson:status", {
               salespersonId: data.salespersonId,
               isOnline: false,
               fieldWorkStatus: sp.fieldWorkStatus,

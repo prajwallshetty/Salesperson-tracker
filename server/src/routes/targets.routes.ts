@@ -13,8 +13,9 @@ router.use(requireAuth, requireRole("ADMIN"));
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { salespersonId, territoryId, period, page = "1", pageSize = "20" } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (salespersonId) where.salespersonId = salespersonId;
     if (period) where.period = period;
     if (territoryId) where.salesperson = { territoryId };
@@ -61,6 +62,8 @@ router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
     const data = updateSchema.parse(req.body);
+    const existing = await prisma.target.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const target = await prisma.target.update({
       where: { id: req.params.id },
       data: {
@@ -77,6 +80,8 @@ router.patch(
 router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
+    const existing = await prisma.target.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     await prisma.target.delete({ where: { id: req.params.id } });
     res.status(204).end();
   })

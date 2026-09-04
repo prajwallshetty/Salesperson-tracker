@@ -17,6 +17,7 @@ interface AuthState {
   user: AuthUser | null;
   status: SessionStatus;
   login: (email: string, password: string) => Promise<AuthUser>;
+  signup: (companyName: string, name: string, email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
@@ -88,6 +89,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: null, status: "unauthenticated" });
       throw new Error("This dashboard is for administrators only. Your account does not have admin access.");
     }
+    cacheUser(user);
+    set({ user, status: "authenticated" });
+    return user;
+  },
+
+  // Creates a brand-new tenant workspace plus its first ADMIN user and signs them straight in -
+  // reuses the exact same session/cookie mechanism as login (see POST /api/auth/signup).
+  signup: async (companyName: string, name: string, email: string, password: string) => {
+    const res = await api.post("/auth/signup", { companyName, name, email, password });
+    const { user } = res.data as { user: AuthUser };
     cacheUser(user);
     set({ user, status: "authenticated" });
     return user;

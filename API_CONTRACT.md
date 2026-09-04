@@ -7,6 +7,52 @@ Uploaded files served statically at `http://localhost:4000/uploads/<filename>`.
 Roles: `ADMIN`, `SALESPERSON`. Most endpoints scope data automatically to the logged-in
 salesperson when called with a SALESPERSON token (no need to pass salespersonId).
 
+## Multi-tenancy
+
+The platform is multi-tenant: every company/organization is a `Tenant`, and every tenant-owned
+row (users, salespersons, customers, products, visits, orders, etc.) carries a `tenantId`. Every
+authenticated request is scoped to `req.auth.tenantId`, which comes from the signed session
+token set at login/signup - **never** from a client-supplied header, query param, or body field.
+A tenant can never read or modify another tenant's data; cross-tenant access attempts return 404
+(existence hidden) or 403 (existence visible, e.g. "not your visit"), never another tenant's
+data. A suspended tenant (`Tenant.status = SUSPENDED`, set by a platform admin) is locked out of
+every endpoint immediately, including already-issued sessions - existing data is never deleted.
+
+- `POST /api/auth/signup` `{ companyName, name, email, password }` → creates a new Tenant, its
+  first ADMIN user, and a 14-day STARTER-plan trial subscription, then signs the owner in (same
+  cookie as `/auth/login`). Returns `{ user, tenant }`.
+
+Subscriptions gate a plan's `maxSalespersons`/`maxAdmins`/feature limits (see
+`SubscriptionPlan.features`); creating a salesperson beyond the plan's limit returns `402` with
+`{ error: "You've reached your plan limit. ..." }` - enforced server-side in
+`services/accounts.ts`, not just hidden in the UI.
+
+## Platform (Super Admin)
+
+SalesGrid's own platform staff - not a tenant user, not reachable via `/api/auth/*` - manage
+tenants/plans/subscriptions across the whole system. Completely separate auth: its own httpOnly
+cookie (`sg_platform_token`), its own JWT shape, its own middleware
+(`middleware/platformAuth.ts`). A tenant session cannot call these, and a platform session cannot
+call any tenant-scoped endpoint.
+
+- `POST /api/platform/login` `{ email, password }` → `{ admin }`, sets `sg_platform_token`
+- `POST /api/platform/logout` → 204
+- `GET /api/platform/me` (platform auth)
+- `PATCH /api/platform/me/password` `{ currentPassword, newPassword }` (platform auth)
+- `GET /api/platform/tenants?search=&status=&page=&pageSize=` (platform auth) → each tenant with
+  its user/salesperson counts and current subscription
+- `GET /api/platform/tenants/:id` (platform auth)
+- `PATCH /api/platform/tenants/:id/status` `{ status: "ACTIVE"|"SUSPENDED" }` (platform auth)
+- `GET /api/platform/plans` (platform auth) → the plan catalog
+- `PATCH /api/platform/tenants/:id/subscription` `{ planKey?, status?, currentPeriodEnd? }`
+  (platform auth) - manual billing path; a real payment provider (Razorpay/Stripe) would call the
+  same update from a verified webhook instead of this endpoint (see `services/billing.ts` for
+  where that integration belongs).
+
+There is no bootstrap endpoint for the first PlatformAdmin - run
+`npx tsx scripts/bootstrap-platform-admin.ts <email> [name]` once from the server, which prints a
+generated password to the console (shown once, not stored in plaintext anywhere).
+
 ## Auth transport — httpOnly cookie (read this before wiring up either frontend)
 
 Auth is cookie-based, not a bearer token in the response body. This is the exact contract the

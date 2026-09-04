@@ -26,6 +26,7 @@ import notificationsRoutes from "./routes/notifications.routes";
 import targetsRoutes from "./routes/targets.routes";
 import attendanceRoutes from "./routes/attendance.routes";
 import usersRoutes from "./routes/users.routes";
+import platformRoutes from "./routes/platform.routes";
 
 import { setIO } from "./sockets/io";
 import { registerLocationSocket } from "./sockets/locationSocket";
@@ -94,6 +95,7 @@ app.use("/api/notifications", notificationsRoutes);
 app.use("/api/targets", targetsRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/platform", platformRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.name === "ZodError") {

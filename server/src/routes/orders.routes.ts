@@ -14,8 +14,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { salespersonId, customerId, from, to } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (customerId) where.customerId = customerId;
@@ -40,8 +41,11 @@ router.get(
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id },
+    const tenantId = req.auth!.tenantId;
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const order = await prisma.order.findFirst({
+      where,
       include: { customer: true, items: { include: { product: true } }, collections: true },
     });
     if (!order) return res.status(404).json({ error: "Not found" });
@@ -64,10 +68,17 @@ const createSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = createSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+    const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId } });
+    if (!customer) return res.status(400).json({ error: "Customer not found" });
+    if (req.auth!.role === "ADMIN") {
+      const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
+      if (!owner) return res.status(400).json({ error: "Salesperson not found" });
+    }
 
-    const { resolve } = await resolvePricingForItems(data.items.map((i) => i.productId), data.customerId);
+    const { resolve } = await resolvePricingForItems(tenantId, data.items.map((i) => i.productId), data.customerId);
     const lines = data.items.map((i) => {
       const hit = resolve(i.productId);
       if (!hit) throw Object.assign(new Error(`Product ${i.productId} not found`), { status: 400 });
@@ -85,6 +96,7 @@ router.post(
 
     const order = await prisma.order.create({
       data: {
+        tenantId,
         number: docNumber("SO"),
         salespersonId,
         customerId: data.customerId,
@@ -109,6 +121,7 @@ router.post(
     });
 
     await notifyAdmins(
+      tenantId,
       "ORDER_CREATED",
       "New sales order",
       `${order.salesperson.user.name} created order ${order.number} for ${order.customer.name}`,
@@ -122,7 +135,12 @@ router.post(
 router.patch(
   "/:id/status",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { status } = z.object({ status: z.enum(["CONFIRMED", "DELIVERED", "CANCELLED"]) }).parse(req.body);
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.order.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const order = await prisma.order.update({ where: { id: req.params.id }, data: { status } });
     res.json(order);
   })

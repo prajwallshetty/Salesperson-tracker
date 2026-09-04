@@ -53,22 +53,29 @@ export interface ResolvedPrice {
  * override configured.
  */
 export async function resolvePricingForItems(
+  tenantId: string,
   productIds: string[],
   customerId: string | null | undefined,
   at: Date = new Date()
 ) {
-  const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
+  // Scoping product/priceList/customer lookups by tenantId isn't just isolation hygiene here -
+  // without it, a caller could reference another tenant's productId and this would silently
+  // resolve and apply that tenant's pricing (or a customer/territory override that reveals its
+  // existence), so `resolve()` below returning null for an out-of-tenant id is load-bearing:
+  // callers already treat "no product found" as a validation error on the request.
+  const products = await prisma.product.findMany({ where: { id: { in: productIds }, tenantId } });
   const productMap = new Map(products.map((p) => [p.id, p]));
 
   let territoryId: string | null = null;
   if (customerId) {
-    const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { territoryId: true } });
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId }, select: { territoryId: true } });
     territoryId = customer?.territoryId ?? null;
   }
 
   const priceLists = productIds.length
     ? await prisma.priceList.findMany({
         where: {
+          tenantId,
           productId: { in: productIds },
           isActive: true,
           effectiveFrom: { lte: at },
