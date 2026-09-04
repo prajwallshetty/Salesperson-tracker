@@ -16,6 +16,7 @@ import { MapboxMap, type MapboxMapHandle } from "@/components/maps/MapboxMap";
 import { useAnimatedMarkers } from "@/components/maps/useAnimatedMarkers";
 import { avatarMarkerElement, pinMarkerElement } from "@/components/maps/markerIcons";
 import { GeocodeSearch, type GeocodeResult } from "@/components/tracking/GeocodeSearch";
+import { ConnectionStatus } from "@/components/tracking/ConnectionStatus";
 import { IconMap } from "@/components/icons";
 import type { LiveSalesperson } from "@/types";
 
@@ -218,6 +219,7 @@ export default function LiveTrackingView() {
         description="Real-time location of your field sales team."
         actions={
           <div className="flex items-center gap-4 text-sm">
+            <ConnectionStatus />
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <span className="size-2.5 rounded-full bg-success" /> Online ({items.filter((i) => i.isOnline && !isStale(i.lastSeenAt)).length})
             </span>
