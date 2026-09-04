@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createSalespersonAccount } from "../services/accounts";
 import { SAFE_USER_SELECT } from "../lib/selects";
+import { generateUniqueAccessCode } from "../lib/accessCode";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from "../utils/dates";
 
 const router = Router();
@@ -67,6 +68,8 @@ router.post(
   asyncHandler(async (req, res) => {
     const data = createSchema.parse(req.body);
     const salesperson = await createSalespersonAccount(data);
+    // The admin who just created this account needs to see the generated access code once.
+    res.locals.allowAccessCode = true;
     res.status(201).json(salesperson);
   })
 );
@@ -136,6 +139,58 @@ router.patch(
       where: { id: req.params.id },
       data: { status },
     });
+    res.json(sp);
+  })
+);
+
+// Admin-only: the general GET /:id above returns a raw Salesperson via `redactAccessCode`
+// (registered globally in index.ts), which strips accessCode from every response by default.
+// These three dedicated endpoints are the only place the real value is legitimately needed
+// (view/copy, regenerate, enable/disable), so they explicitly opt back in.
+router.get(
+  "/:id/access-code",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const sp = await prisma.salesperson.findUnique({
+      where: { id: req.params.id },
+      select: { accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
+    });
+    if (!sp) return res.status(404).json({ error: "Not found" });
+    res.locals.allowAccessCode = true;
+    res.json(sp);
+  })
+);
+
+router.post(
+  "/:id/access-code/regenerate",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.salesperson.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    const accessCode = await generateUniqueAccessCode();
+    const sp = await prisma.salesperson.update({
+      where: { id: req.params.id },
+      data: { accessCode, accessCodeEnabled: true, accessCodeLastUsedAt: null },
+      select: { accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
+    });
+    res.locals.allowAccessCode = true;
+    res.json(sp);
+  })
+);
+
+router.patch(
+  "/:id/access-code",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+    const existing = await prisma.salesperson.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    const sp = await prisma.salesperson.update({
+      where: { id: req.params.id },
+      data: { accessCodeEnabled: enabled },
+      select: { accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
+    });
+    res.locals.allowAccessCode = true;
     res.json(sp);
   })
 );

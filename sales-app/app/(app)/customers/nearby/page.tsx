@@ -2,33 +2,42 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MapPin, Phone, RefreshCw } from "lucide-react";
+import { List, MapPin, Map as MapIcon, Phone, RefreshCw } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
-import { SkeletonList } from "@/components/Skeleton";
+import { SkeletonList, Skeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
-import { GeoError, friendlyGeoErrorMessage, getCurrentPosition } from "@/lib/geolocation";
+import { GeoError, GeoPoint, friendlyGeoErrorMessage, getCurrentPosition } from "@/lib/geolocation";
 import { cn } from "@/lib/utils";
 import type { Customer } from "@/types";
+
+const NearbyMap = dynamic(() => import("@/components/maps/NearbyMap").then((m) => m.NearbyMap), {
+  ssr: false,
+  loading: () => <Skeleton className="h-full w-full" />,
+});
 
 const RADII = [2, 5, 10, 25];
 
 export default function NearbyCustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [position, setPosition] = useState<GeoPoint | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [radiusKm, setRadiusKm] = useState(5);
   const [startingVisitFor, setStartingVisitFor] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "map">("list");
 
   async function load(radius = radiusKm) {
     setLoading(true);
     setError(null);
     try {
       const point = await getCurrentPosition();
+      setPosition(point);
       const res = await api.get<Customer[]>("/customers/nearby", {
         params: { lat: point.lat, lng: point.lng, radiusKm: radius },
       });
@@ -68,13 +77,22 @@ export default function NearbyCustomersPage() {
         title="Nearby Customers"
         back
         right={
-          <button
-            onClick={() => load()}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition active:bg-muted"
-            aria-label="Refresh"
-          >
-            <RefreshCw className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setView((v) => (v === "list" ? "map" : "list"))}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition active:bg-muted"
+              aria-label={view === "list" ? "Show map" : "Show list"}
+            >
+              {view === "list" ? <MapIcon className="h-5 w-5" /> : <List className="h-5 w-5" />}
+            </button>
+            <button
+              onClick={() => load()}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition active:bg-muted"
+              aria-label="Refresh"
+            >
+              <RefreshCw className="h-5 w-5" />
+            </button>
+          </div>
         }
       />
       <div className="px-4 pt-4">
@@ -109,6 +127,15 @@ export default function NearbyCustomersPage() {
               </Button>
             }
           />
+        ) : view === "map" && position ? (
+          <div className="h-[calc(100vh-13rem)] overflow-hidden rounded-2xl border border-border/60">
+            <NearbyMap
+              currentPosition={{ lat: position.lat, lng: position.lng }}
+              customers={customers}
+              onSelectCustomer={(id) => router.push(`/customers/${id}`)}
+              className="h-full w-full"
+            />
+          </div>
         ) : customers.length === 0 ? (
           <EmptyState
             icon={<MapPin />}

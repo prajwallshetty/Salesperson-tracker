@@ -29,10 +29,34 @@ api.interceptors.response.use(
   }
 );
 
+// Generic, unhelpful backend error text that's better replaced with a clearer message
+// for the specific status code - a real 403 like "This visit does not belong to you" is
+// already useful and passes through unchanged; only these known-generic ones get mapped.
+const GENERIC_BACKEND_MESSAGES = new Set(["Insufficient permissions", "Forbidden"]);
+
+function statusFallback(status: number | undefined): string | null {
+  switch (status) {
+    case 401:
+      return "Session expired. Please sign in again.";
+    case 403:
+      return "You don't have permission to access this section.";
+    case 404:
+      return "Record not found.";
+    case 500:
+    case 502:
+    case 503:
+      return "Something went wrong. Please try again.";
+    default:
+      return null;
+  }
+}
+
 export function apiErrorMessage(err: unknown, fallback = "Something went wrong"): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as { error?: string } | undefined;
-    return data?.error || err.message || fallback;
+    const backendMessage = data?.error;
+    if (backendMessage && !GENERIC_BACKEND_MESSAGES.has(backendMessage)) return backendMessage;
+    return statusFallback(err.response?.status) || backendMessage || err.message || fallback;
   }
   if (err instanceof Error) return err.message || fallback;
   return fallback;
