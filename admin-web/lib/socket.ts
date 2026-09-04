@@ -4,20 +4,25 @@ let socket: Socket | null = null;
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
 let connectionStatus: ConnectionStatus = "connecting";
-const statusListeners = new Set<(status: ConnectionStatus) => void>();
+const statusListeners = new Set<() => void>();
 
 function setStatus(next: ConnectionStatus) {
   if (connectionStatus === next) return;
   connectionStatus = next;
-  statusListeners.forEach((fn) => fn(next));
+  statusListeners.forEach((fn) => fn());
 }
 
 export function getConnectionStatus(): ConnectionStatus {
   return connectionStatus;
 }
 
-/** Subscribe to connection status changes (used by the Live/Reconnecting/Offline badge). */
-export function subscribeConnectionStatus(fn: (status: ConnectionStatus) => void) {
+/** Subscribe to connection status changes (used by useSyncExternalStore in the
+ * Live/Reconnecting/Offline badge - the callback takes no args by design, matching
+ * useSyncExternalStore's subscribe signature; read the current value via
+ * getConnectionStatus() instead of trusting an argument, which is what makes this safe
+ * against the "missed update between initial render and subscribing" race a plain
+ * useState+useEffect subscription would have. */
+export function subscribeConnectionStatus(fn: () => void) {
   statusListeners.add(fn);
   return () => {
     statusListeners.delete(fn);
@@ -30,11 +35,15 @@ export function subscribeConnectionStatus(fn: (status: ConnectionStatus) => void
 // nothing else. There is no `auth: { token }` handshake option to pass anymore.
 export function getSocket(): Socket | null {
   if (typeof window === "undefined") return null;
-  if (socket && socket.connected) return socket;
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
+  // Reuse the existing instance whenever one exists, connected or not - socket.io-client
+  // already handles the connecting/reconnecting lifecycle on a single Socket object.
+  // Tearing down and recreating the socket just because it "wasn't connected yet" (which
+  // includes the normal brief in-flight window on every fresh connection) would kill a
+  // perfectly healthy in-progress handshake every time a second component's effect calls
+  // subscribe() moments after the first (e.g. NotificationBell + LiveTrackingView both do,
+  // on mount). Only build a new Socket when none exists at all (first call, or after an
+  // explicit disconnectSocket() on logout).
+  if (socket) return socket;
   setStatus("connecting");
   socket = io(process.env.NEXT_PUBLIC_API_URL, {
     withCredentials: true,
