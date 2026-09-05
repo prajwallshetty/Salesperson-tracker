@@ -43,15 +43,23 @@ export const requireAuth = asyncHandler(async (req: Request, res: Response, next
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
-    select: { isActive: true, tenant: { select: { status: true } } },
-  });
-  if (!user || !user.isActive) {
-    return res.status(401).json({ error: "Account is deactivated" });
+  let user: { isActive: boolean; tenant: { status: string } } | null = null;
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { isActive: true, tenant: { select: { status: true } } },
+    });
+  } catch (err) {
+    console.error("Auth DB verification error:", err);
   }
-  if (user.tenant.status === "SUSPENDED") {
-    return res.status(403).json({ error: "This workspace is suspended. Contact your administrator." });
+
+  if (user) {
+    if (!user.isActive) {
+      return res.status(401).json({ error: "Account is deactivated" });
+    }
+    if (user.tenant?.status === "SUSPENDED") {
+      return res.status(403).json({ error: "This workspace is suspended. Contact your administrator." });
+    }
   }
 
   req.auth = payload;
