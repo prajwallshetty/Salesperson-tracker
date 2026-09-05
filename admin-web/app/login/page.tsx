@@ -10,7 +10,10 @@ import { apiErrorMessage } from "@/lib/api";
 export default function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const router = useRouter();
-  const [email, setEmail] = useState("admin@salesgrid.live");
+  // Starts empty: a hardcoded default here pre-filled one specific account's address for every
+  // visitor, exposing an internal admin email on a public page and making real users clear the
+  // field before they could type their own.
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
