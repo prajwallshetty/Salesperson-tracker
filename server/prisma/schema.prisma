@@ -48,6 +48,15 @@ enum FieldWorkStatus {
   ENDED
 }
 
+// Deliberately a subset of FieldWorkStatus (no NOT_STARTED - a session row only exists once one
+// has actually started): a FieldWorkSession row is created per shift so history/distance/route
+// scoping survives across multiple shifts in a day, instead of only ever knowing "the current"
+// shift via the scalar fields still cached on Salesperson below.
+enum FieldWorkSessionStatus {
+  ACTIVE
+  ENDED
+}
+
 enum VisitStatus {
   PLANNED
   IN_PROGRESS
@@ -357,16 +366,17 @@ model Salesperson {
   accessCodeEnabled    Boolean   @default(true)
   accessCodeLastUsedAt DateTime?
 
-  customers     Customer[]
-  targets       Target[]
-  attendance    Attendance[]
-  visits        Visit[]
-  locationPings LocationPing[]
-  leads         Lead[]
-  quotations    Quotation[]
-  orders        Order[]
-  collections   Collection[]
-  followUps     FollowUp[]
+  customers         Customer[]
+  targets           Target[]
+  attendance        Attendance[]
+  visits            Visit[]
+  locationPings     LocationPing[]
+  fieldWorkSessions FieldWorkSession[]
+  leads             Lead[]
+  quotations        Quotation[]
+  orders            Order[]
+  collections       Collection[]
+  followUps         FollowUp[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -513,50 +523,99 @@ model Attendance {
 
   @@unique([salespersonId, date])
   @@index([tenantId])
+  @@index([tenantId, date])
+}
+
+// One row per field-work shift (Start Field Work -> End Field Work), so a salesperson's history
+// of past shifts - and per-shift distance/route scoping - survives once a new shift starts.
+// Salesperson.fieldWorkStatus/fieldWorkStartAt/lastLat/lastLng/todayDistanceKm remain the
+// denormalized "current state" cache every hot-path read (live tracking, sockets) already uses -
+// this table is the new source of truth for start/end/history, kept in sync with that cache from
+// the same request rather than replacing it, so no existing read site needed to change.
+model FieldWorkSession {
+  id                  String                 @id @default(cuid())
+  tenantId            String
+  salespersonId       String
+  salesperson         Salesperson            @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  status              FieldWorkSessionStatus @default(ACTIVE)
+  startedAt           DateTime               @default(now())
+  endedAt             DateTime?
+  startLatitude       Float
+  startLongitude      Float
+  endLatitude         Float?
+  endLongitude        Float?
+  lastLocationAt      DateTime?
+  totalDistanceMeters Float                  @default(0)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  locationPings LocationPing[]
+
+  @@index([tenantId])
+  @@index([salespersonId, status])
+  @@index([salespersonId, startedAt])
 }
 
 model LocationPing {
-  id            String      @id @default(cuid())
-  tenantId      String
-  salespersonId String
-  salesperson   Salesperson @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
-  lat           Float
-  lng           Float
-  speed         Float?
-  accuracy      Float?
-  heading       Float?
-  recordedAt    DateTime
-  createdAt     DateTime    @default(now())
+  id                 String            @id @default(cuid())
+  tenantId           String
+  salespersonId      String
+  salesperson        Salesperson       @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  fieldWorkSessionId String?
+  fieldWorkSession   FieldWorkSession? @relation(fields: [fieldWorkSessionId], references: [id], onDelete: SetNull)
+  lat                Float
+  lng                Float
+  speed              Float?
+  accuracy           Float?
+  heading            Float?
+  // True when this point represents a geodesically implausible jump from the previous point
+  // (see lib/gpsValidation.ts) - the raw device reading is still kept (never silently discarded,
+  // per "do not delete GPS history without an explicit policy"), but it's excluded from
+  // distance/route-history rendering by default so one bad fix can't corrupt a shift's total
+  // distance or draw a route that teleports across the map.
+  flaggedSuspicious  Boolean           @default(false)
+  recordedAt         DateTime
+  createdAt          DateTime          @default(now())
 
   @@index([tenantId])
   @@index([salespersonId, recordedAt])
+  @@index([fieldWorkSessionId])
 }
 
 model Visit {
-  id            String        @id @default(cuid())
-  tenantId      String
-  salespersonId String
-  salesperson   Salesperson   @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
-  customerId    String
-  customer      Customer      @relation(fields: [customerId], references: [id])
-  status        VisitStatus   @default(PLANNED)
-  plannedAt     DateTime?
-  checkInAt     DateTime?
-  checkInLat    Float?
-  checkInLng    Float?
-  checkOutAt    DateTime?
-  checkOutLat   Float?
-  checkOutLng   Float?
-  durationMin   Int?
-  notes         String?
-  photoUrls     String[]      @default([])
-  outcome       VisitOutcome?
-  followUpDate  DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                       String        @id @default(cuid())
+  tenantId                 String
+  salespersonId            String
+  salesperson              Salesperson   @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  customerId               String
+  customer                 Customer      @relation(fields: [customerId], references: [id])
+  status                   VisitStatus   @default(PLANNED)
+  plannedAt                DateTime?
+  checkInAt                DateTime?
+  checkInLat               Float?
+  checkInLng               Float?
+  checkInAccuracy          Float?
+  // Distance in meters between the salesperson's check-in GPS fix and the customer's stored
+  // location, and whether that fell within the configured geofence radius (lib/geofence.ts) -
+  // null when the customer has no lat/lng to compare against, so "not validated" is
+  // distinguishable from "validated and failed."
+  checkInDistanceMeters    Float?
+  checkInLocationValidated Boolean?
+  checkOutAt               DateTime?
+  checkOutLat              Float?
+  checkOutLng              Float?
+  checkOutAccuracy         Float?
+  durationMin              Int?
+  notes                    String?
+  photoUrls                String[]      @default([])
+  outcome                  VisitOutcome?
+  followUpDate             DateTime?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   @@index([tenantId])
   @@index([salespersonId, createdAt])
+  @@index([salespersonId, plannedAt])
   @@index([customerId])
   @@index([status])
   @@index([createdAt])

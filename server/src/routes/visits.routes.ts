@@ -7,6 +7,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
 import { notifyAdmins } from "../services/notifications";
 import { SAFE_USER_SELECT } from "../lib/selects";
+import { checkGeofence } from "../lib/geofence";
 
 const router = Router();
 router.use(requireAuth);
@@ -125,9 +126,9 @@ router.post(
   "/:id/checkin",
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
-    const { lat, lng } = z.object({ lat: z.number(), lng: z.number() }).parse(req.body);
+    const { lat, lng, accuracy } = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), accuracy: z.number().nonnegative().optional() }).parse(req.body);
 
-    const existing = await prisma.visit.findFirst({ where: { id: req.params.id, tenantId } });
+    const existing = await prisma.visit.findFirst({ where: { id: req.params.id, tenantId }, include: { customer: true } });
     if (!existing) return res.status(404).json({ error: "Visit not found" });
     if (req.auth!.role === "SALESPERSON" && existing.salespersonId !== req.auth!.salespersonId) {
       return res.status(403).json({ error: "This visit does not belong to you" });
@@ -138,9 +139,32 @@ router.post(
       });
     }
 
+    // Geofence is a soft, audited check, not a hard block: customer coordinates are often
+    // imprecisely geocoded and consumer GPS accuracy can be tens of meters, so rejecting a
+    // check-in outright here would risk blocking a genuinely present salesperson. The distance
+    // and validation outcome are stored either way (client sends checkInDistanceMeters/
+    // checkInLocationValidated back to the salesperson as an honest "you appear to be away from
+    // the customer" notice; never a client-supplied `checkedIn`/validated boolean going the other
+    // direction - both are computed here, server-side, from the customer's real stored location).
+    let checkInDistanceMeters: number | null = null;
+    let checkInLocationValidated: boolean | null = null;
+    if (existing.customer.lat != null && existing.customer.lng != null) {
+      const geofence = checkGeofence(lat, lng, existing.customer.lat, existing.customer.lng);
+      checkInDistanceMeters = Math.round(geofence.distanceMeters);
+      checkInLocationValidated = geofence.withinRadius;
+    }
+
     const visit = await prisma.visit.update({
       where: { id: req.params.id },
-      data: { status: "IN_PROGRESS", checkInAt: new Date(), checkInLat: lat, checkInLng: lng },
+      data: {
+        status: "IN_PROGRESS",
+        checkInAt: new Date(),
+        checkInLat: lat,
+        checkInLng: lng,
+        checkInAccuracy: accuracy,
+        checkInDistanceMeters,
+        checkInLocationValidated,
+      },
       include: { customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
 
@@ -165,10 +189,11 @@ router.post(
   "/:id/checkout",
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
-    const { lat, lng, notes, outcome, followUpDate, photoUrls } = z
+    const { lat, lng, accuracy, notes, outcome, followUpDate, photoUrls } = z
       .object({
-        lat: z.number(),
-        lng: z.number(),
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+        accuracy: z.number().nonnegative().optional(),
         notes: z.string().optional(),
         outcome: z
           .enum(["ORDER_PLACED", "FOLLOW_UP_REQUIRED", "NOT_INTERESTED", "NO_RESPONSE", "PAYMENT_COLLECTED", "OTHER"])
@@ -204,6 +229,7 @@ router.post(
         checkOutAt,
         checkOutLat: lat,
         checkOutLng: lng,
+        checkOutAccuracy: accuracy,
         durationMin,
         notes,
         outcome,
@@ -267,6 +293,16 @@ router.patch(
         followUpDate: z.string().optional(),
       })
       .parse(req.body);
+    // A salesperson must reach IN_PROGRESS/COMPLETED only through the real GPS-validated
+    // checkin/checkout flow above, never by directly PATCHing status - otherwise a visit could be
+    // marked "completed" (with a customer notified, sales credit recorded, etc.) with no actual
+    // check-in ever having happened. MISSED/CANCELLED stay salesperson-settable (a genuine
+    // "the customer cancelled" housekeeping action, not a way to fake a completed visit); a full
+    // status admin-only override remains available for corrections.
+    if (req.auth!.role === "SALESPERSON" && data.status && !["MISSED", "CANCELLED"].includes(data.status)) {
+      return res.status(403).json({ error: "Use check-in/check-out to update this visit's status." });
+    }
+
     const where: any = { id: req.params.id, tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     const existing = await prisma.visit.findFirst({ where });

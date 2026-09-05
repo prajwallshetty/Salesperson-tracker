@@ -10,10 +10,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FilterSelect } from "@/components/FilterSelect";
 import { IconPause, IconPlay } from "@/components/icons";
 import { RouteMap } from "@/components/maps/RouteMap";
 import { cn } from "@/lib/utils";
-import type { RouteHistoryResponse } from "@/types";
+import type { FieldWorkSession, RouteHistoryResponse } from "@/types";
 
 const OUTCOME_LABEL: Record<string, string> = {
   ORDER_PLACED: "Order Placed",
@@ -31,6 +32,8 @@ interface RouteHistoryPanelProps {
 
 export default function RouteHistoryPanel({ salespersonId, salespersonName }: RouteHistoryPanelProps) {
   const [date, setDate] = useState(todayIso());
+  const [sessions, setSessions] = useState<FieldWorkSession[]>([]);
+  const [sessionId, setSessionId] = useState("");
   const [data, setData] = useState<RouteHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(false);
@@ -38,16 +41,27 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
   const [speed, setSpeed] = useState(4);
   const timerRef = useRef<number | null>(null);
 
+  // Shift list for the filter dropdown - independent of the date filter below (a shift can span
+  // into the next calendar day, so this isn't reloaded on date change).
+  useEffect(() => {
+    api
+      .get(`/tracking/${salespersonId}/field-work-sessions`)
+      .then((res) => setSessions(res.data))
+      .catch(() => {
+        /* the panel still works with date-based filtering if this fails */
+      });
+  }, [salespersonId]);
+
   useEffect(() => {
     setLoading(true);
     setPlaying(false);
     setCursor(0);
     api
-      .get(`/tracking/${salespersonId}/route`, { params: { date } })
+      .get(`/tracking/${salespersonId}/route`, { params: sessionId ? { fieldWorkSessionId: sessionId } : { date } })
       .then((res) => setData(res.data))
       .catch((err) => toast.error(apiErrorMessage(err, "Failed to load route history")))
       .finally(() => setLoading(false));
-  }, [salespersonId, date]);
+  }, [salespersonId, date, sessionId]);
 
   const points = data?.points ?? [];
 
@@ -72,19 +86,39 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-medium text-foreground">Date</label>
-          <Input type="date" value={date} max={todayIso()} onChange={(e) => setDate(e.target.value)} className="w-auto" />
+          <Input
+            type="date"
+            value={date}
+            max={todayIso()}
+            onChange={(e) => {
+              setSessionId("");
+              setDate(e.target.value);
+            }}
+            className="w-auto"
+            disabled={!!sessionId}
+          />
+          <FilterSelect
+            value={sessionId}
+            onChange={setSessionId}
+            placeholder="All shifts that day"
+            className="min-w-[220px]"
+            options={sessions.map((s) => ({
+              value: s.id,
+              label: `${new Date(s.startedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}${s.status === "ACTIVE" ? " (active)" : ""}`,
+            }))}
+          />
         </div>
-        <Badge variant={isToday ? "success" : "muted"}>
-          {isToday ? "Viewing Live Day (Today)" : `Viewing route history for ${date}`}
+        <Badge variant={isToday && !sessionId ? "success" : "muted"}>
+          {sessionId ? "Viewing one field-work shift" : isToday ? "Viewing Live Day (Today)" : `Viewing route history for ${date}`}
         </Badge>
       </div>
 
       {loading ? (
         <Skeleton className="h-96 w-full" />
       ) : !data || points.length === 0 ? (
-        <EmptyState title="No route data" message={`No GPS trail recorded for ${salespersonName ?? "this salesperson"} on ${date}.`} />
+        <EmptyState title="No route data" message={`No GPS trail recorded for ${salespersonName ?? "this salesperson"} ${sessionId ? "in this shift" : `on ${date}`}.`} />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -93,6 +127,11 @@ export default function RouteHistoryPanel({ salespersonId, salespersonName }: Ro
             <SummaryStat label="Start" value={data.start ? formatTime(data.start.recordedAt) : "-"} />
             <SummaryStat label="End" value={data.end ? formatTime(data.end.recordedAt) : "-"} />
           </div>
+          {data.excludedPointCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {data.excludedPointCount} point{data.excludedPointCount === 1 ? "" : "s"} excluded from this route as GPS noise/duplicates.
+            </p>
+          )}
 
           <div className="h-[420px] w-full overflow-hidden rounded-2xl border border-border/60">
             <RouteMap points={points} stops={data.stops} cursor={cursor} className="h-full w-full" />

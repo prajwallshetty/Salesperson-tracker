@@ -195,19 +195,26 @@ export const useFieldWorkStore = create<FieldWorkState>()((set, get) => ({
         }
       }
 
-      const { watchId } = get();
-      if (watchId >= 0) clearPositionWatch(watchId);
-
       const fallback = get().lastPoint;
       const finalPoint = point ?? fallback;
-      if (finalPoint) {
-        await api.post("/tracking/field-work/end", { lat: finalPoint.lat, lng: finalPoint.lng });
-      } else {
+      if (!finalPoint) {
         // No location ever available — server still needs a lat/lng; surface a clear error.
+        // Tracking is deliberately left untouched here: the watcher is still running and the
+        // store still says ACTIVE, which is the truth - nothing was actually ended.
         toast.error("No location available to end field work. Please try again with location enabled.");
         set({ ending: false });
         return;
       }
+
+      // Backend confirmation happens BEFORE touching the local watcher/state - if this request
+      // fails (network blip, server error), the watcher must keep running and the UI must keep
+      // showing "ACTIVE", because that's what's actually still true. Stopping the watcher first
+      // (the previous behavior) would silently stop sending location updates while the UI still
+      // claimed field work was active - frontend and backend left in different states.
+      await api.post("/tracking/field-work/end", { lat: finalPoint.lat, lng: finalPoint.lng });
+
+      const { watchId } = get();
+      if (watchId >= 0) clearPositionWatch(watchId);
 
       set({
         tracking: false,
@@ -219,7 +226,7 @@ export const useFieldWorkStore = create<FieldWorkState>()((set, get) => ({
       toast.success("Field work ended. Tracking stopped.");
     } catch (err) {
       set({ ending: false });
-      const message = err instanceof Error ? err.message : "Could not end field work";
+      const message = err instanceof Error ? err.message : "Unable to end field work. Please try again.";
       toast.error(message);
       throw err;
     }

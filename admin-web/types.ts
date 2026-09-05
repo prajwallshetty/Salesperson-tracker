@@ -260,12 +260,26 @@ export interface LiveSalesperson {
 
 export interface RouteHistoryResponse {
   date: string;
+  fieldWorkSession: FieldWorkSession | null;
   points: LocationPing[];
+  excludedPointCount: number;
   stops: Visit[];
   distanceKm: number;
   durationMin: number;
   start: LocationPing | null;
   end: LocationPing | null;
+}
+
+export interface FieldWorkSession {
+  id: string;
+  status: "ACTIVE" | "ENDED";
+  startedAt: string;
+  endedAt: string | null;
+  startLatitude: number;
+  startLongitude: number;
+  endLatitude: number | null;
+  endLongitude: number | null;
+  totalDistanceMeters: number;
 }
 
 export interface DashboardSummary {

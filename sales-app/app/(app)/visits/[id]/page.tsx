@@ -121,9 +121,15 @@ export default function VisitDetailPage() {
     setGeoError(null);
     try {
       const point = await getCurrentPosition();
-      const res = await api.post<Visit>(`/visits/${id}/checkin`, { lat: point.lat, lng: point.lng });
+      const res = await api.post<Visit>(`/visits/${id}/checkin`, { lat: point.lat, lng: point.lng, accuracy: point.accuracy ?? undefined });
       setVisit(res.data);
-      toast.success("Checked in");
+      // A soft, informational notice only - the backend never blocks the check-in on this, since
+      // customer coordinates can be imprecisely geocoded and consumer GPS accuracy varies.
+      if (res.data.checkInLocationValidated === false) {
+        toast.warning("You appear to be away from the customer location. Check-in was still recorded.");
+      } else {
+        toast.success("Checked in");
+      }
     } catch (err) {
       if (err instanceof GeoError) {
         setGeoError(friendlyGeoErrorMessage(err.kind));
@@ -165,6 +171,7 @@ export default function VisitDetailPage() {
       const res = await api.post<Visit>(`/visits/${id}/checkout`, {
         lat: point.lat,
         lng: point.lng,
+        accuracy: point.accuracy ?? undefined,
         notes: notes || undefined,
         outcome: outcome || undefined,
         followUpDate: followUpDate ? format(followUpDate, "yyyy-MM-dd") : undefined,
