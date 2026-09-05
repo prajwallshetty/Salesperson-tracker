@@ -6,6 +6,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, AUTH_COOKIE_NAME } from "../middleware/auth";
 import { generateUniqueTenantSlug } from "../lib/slug";
 import { authRateLimit, signupRateLimit } from "../middleware/rateLimit";
+import { recordBillingAudit } from "../services/billingAudit";
 
 const router = Router();
 
@@ -65,6 +66,9 @@ router.post(
       salespersonId: user.salesperson?.id,
       tenantId: user.tenantId,
     });
+
+    // Fire-and-forget: never let a lastLoginAt write failure block or delay the login response.
+    prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch((err) => console.error("Failed to record lastLoginAt:", err));
 
     res.cookie(AUTH_COOKIE_NAME, token, cookieOptions());
     res.json({
@@ -194,7 +198,9 @@ router.post(
       tenantId: salesperson.tenantId,
     });
 
-    await prisma.salesperson.update({ where: { id: salesperson.id }, data: { accessCodeLastUsedAt: new Date() } });
+    const loginAt = new Date();
+    await prisma.salesperson.update({ where: { id: salesperson.id }, data: { accessCodeLastUsedAt: loginAt } });
+    prisma.user.update({ where: { id: salesperson.user.id }, data: { lastLoginAt: loginAt } }).catch((err) => console.error("Failed to record lastLoginAt:", err));
 
     res.cookie(AUTH_COOKIE_NAME, token, cookieOptions());
     res.json({
@@ -240,7 +246,35 @@ router.get(
       salespersonId: user.salesperson?.id ?? null,
       salespersonStatus: user.salesperson?.status ?? null,
       tenantId: user.tenantId,
+      // Present only for a session minted by POST /api/platform/tenants/:id/impersonate - lets
+      // the frontend show the persistent "OWNER IMPERSONATION MODE" banner without a second
+      // request. Never derived from anything the browser sends; it's a claim baked into the JWT
+      // itself at mint time (see lib/auth.ts's TokenPayload.impersonatedBy).
+      impersonation: req.auth!.impersonatedBy ? { active: true } : null,
     });
+  })
+);
+
+// Ends an impersonation session started via POST /api/platform/tenants/:id/impersonate. Only
+// meaningful on a token that actually carries impersonatedBy - a normal tenant session has
+// nothing to "end" here (the owner's own super-admin session, on its separate sg_platform_token
+// cookie, was never touched by impersonation and needs no action either).
+router.post(
+  "/impersonation/end",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.auth!.impersonatedBy) {
+      return res.status(400).json({ error: "This session is not an impersonation session" });
+    }
+    await recordBillingAudit({
+      tenantId: req.auth!.tenantId,
+      actorType: "PLATFORM_ADMIN",
+      actorId: req.auth!.impersonatedBy,
+      action: "IMPERSONATION_ENDED",
+      newState: { impersonatedUserId: req.auth!.userId },
+    });
+    res.clearCookie(AUTH_COOKIE_NAME, cookieOptions());
+    res.status(204).end();
   })
 );
 

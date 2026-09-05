@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useAuthStore } from "@/store/auth";
 import { Sidebar, useSidebarCollapsed } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -59,26 +60,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <aside
-        className={cn(
-          "hidden shrink-0 border-r border-border/60 transition-[width] duration-200 lg:block",
-          collapsed ? "w-[76px]" : "w-64"
-        )}
-      >
-        <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
-      </aside>
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      {user.impersonation?.active && <ImpersonationBanner />}
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className={cn(
+            "hidden shrink-0 border-r border-border/60 transition-[width] duration-200 lg:block",
+            collapsed ? "w-[76px]" : "w-64"
+          )}
+        >
+          <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
+        </aside>
 
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 p-0">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <Sidebar variant="mobile" onNavigate={() => setMobileOpen(false)} />
-        </SheetContent>
-      </Sheet>
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="w-72 p-0">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <Sidebar variant="mobile" onNavigate={() => setMobileOpen(false)} />
+          </SheetContent>
+        </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onMenuClick={() => setMobileOpen(true)} onSearchClick={openPalette} />
-        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar onMenuClick={() => setMobileOpen(true)} onSearchClick={openPalette} />
+          <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        </div>
       </div>
 
       {paletteMounted && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />}

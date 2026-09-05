@@ -3,20 +3,23 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Building2, Ban, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Building2, Ban, CheckCircle2, LogIn } from "lucide-react";
 import { platformApi } from "@/lib/platformApi";
 import { apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/Skeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
-import type { PlatformTenantDetail, PlatformBillingAuditLogItem, Paginated } from "@/types";
+import type { PlatformTenantDetail, PlatformBillingAuditLogItem, PlatformPaymentItem, Paginated } from "@/types";
 
 export default function SuperAdminTenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +28,12 @@ export default function SuperAdminTenantDetailPage() {
   const [loading, setLoading] = useState(true);
   const [auditLog, setAuditLog] = useState<Paginated<PlatformBillingAuditLogItem> | null>(null);
   const [auditLoading, setAuditLoading] = useState(true);
+  const [payments, setPayments] = useState<Paginated<PlatformPaymentItem> | null>(null);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [confirmSuspend, setConfirmSuspend] = useState(false);
+  const [impersonateOpen, setImpersonateOpen] = useState(false);
+  const [impersonateReason, setImpersonateReason] = useState("");
+  const [impersonating, setImpersonating] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -46,6 +54,30 @@ export default function SuperAdminTenantDetailPage() {
       .catch((err) => toast.error(apiErrorMessage(err, "Failed to load billing activity")))
       .finally(() => setAuditLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    setPaymentsLoading(true);
+    platformApi
+      .get("/payments", { params: { tenantId: id, pageSize: 20 } })
+      .then((res) => setPayments(res.data))
+      .catch((err) => toast.error(apiErrorMessage(err, "Failed to load payments")))
+      .finally(() => setPaymentsLoading(false));
+  }, [id]);
+
+  const startImpersonation = async () => {
+    setImpersonating(true);
+    try {
+      await platformApi.post(`/tenants/${id}/impersonate`, { reason: impersonateReason });
+      // Full navigation (not client-side routing) - the tenant sf_token cookie the backend just
+      // set needs to be picked up by a fresh request to /dashboard, and the tenant app's own
+      // auth store needs to re-initialize as this impersonated identity rather than carrying
+      // over any cached "logged out" state from the super-admin section.
+      window.location.href = "/dashboard";
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Couldn't start impersonation"));
+      setImpersonating(false);
+    }
+  };
 
   const toggleStatus = async () => {
     if (!tenant) return;
@@ -78,19 +110,24 @@ export default function SuperAdminTenantDetailPage() {
 
       <PageHeader
         title={tenant.name}
-        description={tenant.slug}
+        description={tenant.admin ? `${tenant.slug} · ${tenant.admin.name} (${tenant.admin.email})` : tenant.slug}
         actions={
-          <Button variant={tenant.status === "ACTIVE" ? "destructive" : "success"} size="sm" onClick={() => setConfirmSuspend(true)}>
-            {tenant.status === "ACTIVE" ? (
-              <>
-                <Ban className="size-4" /> Suspend
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="size-4" /> Activate
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setImpersonateOpen(true)} disabled={tenant.status === "SUSPENDED"}>
+              <LogIn className="size-4" /> Login as tenant
+            </Button>
+            <Button variant={tenant.status === "ACTIVE" ? "destructive" : "success"} size="sm" onClick={() => setConfirmSuspend(true)}>
+              {tenant.status === "ACTIVE" ? (
+                <>
+                  <Ban className="size-4" /> Suspend
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="size-4" /> Activate
+                </>
+              )}
+            </Button>
+          </div>
         }
       />
 
@@ -124,11 +161,36 @@ export default function SuperAdminTenantDetailPage() {
             <p className="mt-1 text-lg font-bold text-foreground">{tenant.customerCount}</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Leads</p>
+            <p className="mt-1 text-lg font-bold text-foreground">{tenant.leadCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Visits</p>
+            <p className="mt-1 text-lg font-bold text-foreground">{tenant.visitCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Orders</p>
+            <p className="mt-1 text-lg font-bold text-foreground">{tenant.orderCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Collections</p>
+            <p className="mt-1 text-lg font-bold text-foreground">{tenant.collectionCount}</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs defaultValue="subscription">
         <TabsList>
           <TabsTrigger value="subscription">Subscription</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="activity">Billing Activity</TabsTrigger>
         </TabsList>
 
@@ -154,6 +216,45 @@ export default function SuperAdminTenantDetailPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="payments" className="mt-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Payment ID</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Received</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paymentsLoading ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                    Loading...
+                  </TableCell>
+                </TableRow>
+              ) : !payments || payments.items.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={4} className="py-10">
+                    <EmptyState title="No payments yet" message="Payments appear here once Razorpay sends a real payment webhook for this tenant." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                payments.items.map((p) => (
+                  <TableRow key={p.billingEventId}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{p.razorpayPaymentId}</TableCell>
+                    <TableCell className="font-medium text-foreground">{p.amount != null ? formatCurrency(p.amount) : "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={p.status === "captured" ? "success" : p.status === "failed" ? "danger" : "muted"}>{p.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatDateTime(p.createdAt)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">
@@ -205,6 +306,30 @@ export default function SuperAdminTenantDetailPage() {
         onClose={() => setConfirmSuspend(false)}
         onConfirm={toggleStatus}
       />
+
+      <Dialog open={impersonateOpen} onOpenChange={(o) => !o && !impersonating && setImpersonateOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Login as {tenant.name}?</DialogTitle>
+            <DialogDescription>
+              This opens a 20-minute session as this tenant&apos;s admin. It is fully audited and shown to you as a persistent banner the whole time -
+              your own Owner session is never affected.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <Label>Reason (required, for the audit log)</Label>
+            <Input value={impersonateReason} onChange={(e) => setImpersonateReason(e.target.value)} placeholder="e.g. Investigating support ticket #123" autoFocus />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImpersonateOpen(false)} disabled={impersonating}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={startImpersonation} loading={impersonating} disabled={impersonateReason.trim().length < 3}>
+              Start impersonation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

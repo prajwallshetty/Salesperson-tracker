@@ -35,6 +35,7 @@ import razorpayWebhookRoutes from "./routes/razorpayWebhook.routes";
 import { setIO } from "./sockets/io";
 import { registerLocationSocket } from "./sockets/locationSocket";
 import { redactAccessCode } from "./middleware/redactAccessCode";
+import { prisma } from "./lib/prisma";
 
 const app = express();
 const server = http.createServer(app);
@@ -90,7 +91,28 @@ app.use(cookieParser());
 app.use(redactAccessCode);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-app.get("/api/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+// Public, unauthenticated health probe - deliberately reports only non-sensitive shape (no
+// connection strings, no secrets, no internal hostnames). The Owner Dashboard's richer
+// /api/platform/system-health (auth-gated) covers per-service detail; this stays cheap enough
+// for an external uptime monitor to call frequently.
+const SERVER_STARTED_AT = Date.now();
+app.get("/api/health", async (_req, res) => {
+  let database: "ok" | "error" = "ok";
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch {
+    database = "error";
+  }
+  res.json({
+    ok: database === "ok",
+    api: "ok",
+    database,
+    environment: process.env.NODE_ENV || "development",
+    version: process.env.npm_package_version || "unknown",
+    uptimeSeconds: Math.round((Date.now() - SERVER_STARTED_AT) / 1000),
+    time: new Date().toISOString(),
+  });
+});
 
 app.use("/api/public", publicRoutes);
 app.use("/api/auth", authRoutes);

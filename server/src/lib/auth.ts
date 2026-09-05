@@ -19,6 +19,11 @@ export interface TokenPayload {
   // re-verified against the live Tenant row on every request rather than trusted blindly for
   // the tenant's current status.
   tenantId: string;
+  // Only set by POST /api/platform/tenants/:id/impersonate (platform-admin-only, see
+  // platformOps.routes.ts) - the id of the PlatformAdmin who minted this session. Its mere
+  // presence is what the frontend banner and POST /api/auth/impersonation/end key off of;
+  // never settable by anything a browser sends, only ever written server-side at mint time.
+  impersonatedBy?: string;
 }
 
 // Platform-level staff (SalesGrid's own team, not a tenant's ADMIN) authenticate with a
@@ -29,8 +34,8 @@ export interface PlatformTokenPayload {
   platformAdminId: string;
 }
 
-export function signToken(payload: Omit<TokenPayload, "kind">): string {
-  return jwt.sign({ ...payload, kind: "tenant" }, JWT_SECRET, { expiresIn: "30d" });
+export function signToken(payload: Omit<TokenPayload, "kind">, options?: { expiresIn?: jwt.SignOptions["expiresIn"] }): string {
+  return jwt.sign({ ...payload, kind: "tenant" }, JWT_SECRET, { expiresIn: options?.expiresIn ?? "30d" });
 }
 
 export function verifyToken(token: string): TokenPayload {
