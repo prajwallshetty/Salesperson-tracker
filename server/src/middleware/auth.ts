@@ -43,23 +43,22 @@ export const requireAuth = asyncHandler(async (req: Request, res: Response, next
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  let user: { isActive: boolean; tenant: { status: string } } | null = null;
-  try {
-    user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: { isActive: true, tenant: { select: { status: true } } },
-    });
-  } catch (err) {
-    console.error("Auth DB verification error:", err);
+  // Fail CLOSED, not open: a thrown DB error and a genuinely missing user must both reject the
+  // request, never fall through to `next()` as if the account were fine. A prior version of this
+  // check caught the DB error, left `user` as `null`, and then skipped the isActive/suspended
+  // checks entirely whenever `user` was falsy - meaning a deleted user row (or any transient DB
+  // hiccup on this lookup) let an otherwise-valid, unexpired JWT authenticate successfully
+  // regardless of whether the account was deactivated or even still existed. Do not reintroduce
+  // that pattern.
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { isActive: true, tenant: { select: { status: true } } },
+  });
+  if (!user || !user.isActive) {
+    return res.status(401).json({ error: "Account is deactivated" });
   }
-
-  if (user) {
-    if (!user.isActive) {
-      return res.status(401).json({ error: "Account is deactivated" });
-    }
-    if (user.tenant?.status === "SUSPENDED") {
-      return res.status(403).json({ error: "This workspace is suspended. Contact your administrator." });
-    }
+  if (user.tenant.status === "SUSPENDED") {
+    return res.status(403).json({ error: "This workspace is suspended. Contact your administrator." });
   }
 
   req.auth = payload;
