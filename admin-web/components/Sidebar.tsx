@@ -112,12 +112,12 @@ export function Sidebar({ collapsed = false, onToggleCollapse, onNavigate, varia
   return (
     <div className="flex h-full flex-col bg-card">
       <div className={cn("flex h-16 shrink-0 items-center gap-2.5 border-b border-border/60 px-5", isCollapsed && "justify-center px-0")}>
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
-          SF
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-card border border-border/60 p-0.5 shadow-xs overflow-hidden">
+          <img src="/logo.png" alt="SalesGrid Logo" className="h-full w-full object-contain" />
         </div>
         {!isCollapsed && (
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-tight text-foreground">SalesForce Pro</p>
+            <p className="truncate text-sm font-bold leading-tight text-foreground">SalesGrid</p>
             <p className="truncate text-[11px] leading-tight text-muted-foreground">Admin Dashboard</p>
           </div>
         )}
@@ -200,7 +200,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse, onNavigate, varia
       )}
       {!onToggleCollapse && (
         <div className="border-t border-border/60 px-5 py-3.5 text-[11px] text-muted-foreground/60">
-          &copy; {new Date().getFullYear()} SalesForce Pro
+          &copy; {new Date().getFullYear()} SalesGrid
         </div>
       )}
     </div>

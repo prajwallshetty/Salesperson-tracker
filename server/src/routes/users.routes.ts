@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { hashPassword } from "../lib/auth";
 import { createSalespersonAccount } from "../services/accounts";
 import { SAFE_USER_SELECT } from "../lib/selects";
+import { generateUniqueAccessCode } from "../lib/accessCode";
 
 const router = Router();
 router.use(requireAuth, requireRole("ADMIN"));
@@ -14,7 +15,7 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
-    const { role, isActive, search, page = "1", pageSize = "20" } = req.query as Record<string, string>;
+    const { role, isActive, accessCodeStatus, search, page = "1", pageSize = "20" } = req.query as Record<string, string>;
     const where: any = { tenantId };
     if (role) where.role = role;
     if (isActive !== undefined) where.isActive = isActive === "true";
@@ -22,8 +23,19 @@ router.get(
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
+        { phone: { contains: search, mode: "insensitive" } },
       ];
     }
+    if (accessCodeStatus) {
+      if (accessCodeStatus === "ENABLED") {
+        where.salesperson = { accessCodeEnabled: true, accessCode: { not: null } };
+      } else if (accessCodeStatus === "DISABLED") {
+        where.salesperson = { accessCodeEnabled: false };
+      } else if (accessCodeStatus === "NONE") {
+        where.salesperson = { accessCode: null };
+      }
+    }
+
     const take = Math.min(parseInt(pageSize, 10) || 20, 200);
     const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
 
@@ -39,7 +51,16 @@ router.get(
           avatarUrl: true,
           isActive: true,
           createdAt: true,
-          salesperson: { select: { id: true, employeeCode: true, status: true, territory: { select: { id: true, name: true } } } },
+          salesperson: {
+            select: {
+              id: true,
+              employeeCode: true,
+              status: true,
+              accessCodeEnabled: true,
+              accessCodeLastUsedAt: true,
+              territory: { select: { id: true, name: true } },
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
         take,
@@ -65,7 +86,9 @@ router.get(
         avatarUrl: true,
         isActive: true,
         createdAt: true,
-        salesperson: { include: { territory: true } },
+        salesperson: {
+          include: { territory: true },
+        },
       },
     });
     if (!user) return res.status(404).json({ error: "Not found" });
@@ -73,19 +96,22 @@ router.get(
   })
 );
 
-const createUserSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  password: z.string().min(6),
-  phone: z.string().optional(),
-  role: z.enum(["ADMIN", "SALESPERSON"]),
-  // required when role === "SALESPERSON" (validated below) - reuses the same
-  // create-salesperson-account flow as POST /api/salespersons so a SALESPERSON user always gets
-  // its linked Salesperson row created the same way.
-  employeeCode: z.string().optional(),
-  territoryId: z.string().optional().nullable(),
-  managerId: z.string().optional().nullable(),
-});
+const createUserSchema = z
+  .object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    password: z.string().min(6).optional(),
+    phone: z.string().optional(),
+    role: z.enum(["ADMIN", "SALESPERSON"]),
+    employeeCode: z.string().optional(),
+    territoryId: z.string().optional().nullable(),
+    managerId: z.string().optional().nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.role === "ADMIN" && (!v.password || v.password.length < 6)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["password"], message: "Password (min 6 chars) is required for ADMIN role" });
+    }
+  });
 
 router.post(
   "/",
@@ -106,13 +132,25 @@ router.post(
         territoryId: data.territoryId,
         managerId: data.managerId,
       });
-      return res.status(201).json(salesperson.user);
+      res.locals.allowAccessCode = true;
+      return res.status(201).json({
+        ...salesperson.user,
+        salesperson: {
+          id: salesperson.id,
+          employeeCode: salesperson.employeeCode,
+          status: salesperson.status,
+          accessCode: salesperson.accessCode,
+          accessCodeEnabled: salesperson.accessCodeEnabled,
+          accessCodeLastUsedAt: salesperson.accessCodeLastUsedAt,
+          territory: salesperson.territory,
+        },
+      });
     }
 
     const email = data.email.toLowerCase();
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(409).json({ error: "Email already in use" });
-    const passwordHash = await hashPassword(data.password);
+    const passwordHash = await hashPassword(data.password!);
     const user = await prisma.user.create({
       data: { tenantId, name: data.name, email, passwordHash, phone: data.phone, role: "ADMIN" },
       select: SAFE_USER_SELECT,
@@ -139,11 +177,6 @@ router.patch(
     if (!existing) return res.status(404).json({ error: "Not found" });
 
     if (data.role && data.role !== existing.role) {
-      // Switching SALESPERSON -> ADMIN or vice versa is a structural change (a Salesperson row
-      // is tied 1:1 to a User and has its own FKs from visits/orders/etc.), so it isn't safe to
-      // do implicitly here. Reject rather than silently leaving an inconsistent linkage - an
-      // admin who genuinely needs this should deactivate the old account and create a new one
-      // with POST /api/users.
       if (data.role === "ADMIN" && existing.salesperson) {
         return res.status(409).json({
           error: "Cannot change role to ADMIN: user has a linked Salesperson record. Deactivate and create a new account instead.",
@@ -168,6 +201,11 @@ router.patch(
 router.post(
   "/:id/reset-password",
   asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.role === "SALESPERSON") {
+      return res.status(400).json({ error: "Salespersons authenticate via Access Code, not password." });
+    }
     const { password } = z.object({ password: z.string().min(6) }).parse(req.body);
     const existing = await prisma.user.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!existing) return res.status(404).json({ error: "Not found" });
@@ -177,4 +215,93 @@ router.post(
   })
 );
 
+// Access Code Endpoints for Users
+router.get(
+  "/:id/access-code",
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: { salesperson: true },
+    });
+    if (!user || !user.salesperson) return res.status(404).json({ error: "Salesperson account not found" });
+
+    let sp = user.salesperson;
+    if (!sp.accessCode) {
+      const code = await generateUniqueAccessCode();
+      sp = await prisma.salesperson.update({
+        where: { id: sp.id },
+        data: { accessCode: code, accessCodeEnabled: true },
+      });
+    }
+
+    res.locals.allowAccessCode = true;
+    res.json({
+      salespersonId: sp.id,
+      accessCode: sp.accessCode,
+      accessCodeEnabled: sp.accessCodeEnabled,
+      accessCodeLastUsedAt: sp.accessCodeLastUsedAt,
+    });
+  })
+);
+
+router.post(
+  "/:id/access-code/regenerate",
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: { salesperson: true },
+    });
+    if (!user || !user.salesperson) return res.status(404).json({ error: "Salesperson account not found" });
+
+    const code = await generateUniqueAccessCode();
+    const sp = await prisma.salesperson.update({
+      where: { id: user.salesperson.id },
+      data: { accessCode: code, accessCodeEnabled: true, accessCodeLastUsedAt: null },
+    });
+
+    res.locals.allowAccessCode = true;
+    res.json({
+      salespersonId: sp.id,
+      accessCode: sp.accessCode,
+      accessCodeEnabled: sp.accessCodeEnabled,
+      accessCodeLastUsedAt: sp.accessCodeLastUsedAt,
+    });
+  })
+);
+
+router.patch(
+  "/:id/access-code",
+  asyncHandler(async (req, res) => {
+    const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: { salesperson: true },
+    });
+    if (!user || !user.salesperson) return res.status(404).json({ error: "Salesperson account not found" });
+
+    let sp = user.salesperson;
+    if (!sp.accessCode) {
+      const code = await generateUniqueAccessCode();
+      sp = await prisma.salesperson.update({
+        where: { id: sp.id },
+        data: { accessCode: code, accessCodeEnabled: enabled },
+      });
+    } else {
+      sp = await prisma.salesperson.update({
+        where: { id: sp.id },
+        data: { accessCodeEnabled: enabled },
+      });
+    }
+
+    res.locals.allowAccessCode = true;
+    res.json({
+      salespersonId: sp.id,
+      accessCode: sp.accessCode,
+      accessCodeEnabled: sp.accessCodeEnabled,
+      accessCodeLastUsedAt: sp.accessCodeLastUsedAt,
+    });
+  })
+);
+
 export default router;
+

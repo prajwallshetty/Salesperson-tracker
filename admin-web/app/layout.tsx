@@ -10,8 +10,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SalesForce Pro — Admin",
+  title: "SalesGrid — Admin",
   description: "Admin dashboard for the Sales Force Management System",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

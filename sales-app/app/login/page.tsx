@@ -68,8 +68,8 @@ export default function LoginPage() {
         className="relative mx-auto w-full max-w-sm"
       >
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-2xl font-black tracking-tight text-white shadow-lg backdrop-blur">
-            SF
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 p-2 shadow-lg backdrop-blur overflow-hidden">
+            <img src="/logo.png" alt="SalesGrid Logo" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white">Welcome back</h1>
           <p className="mt-1 text-sm text-white/70">Enter your access code to continue</p>

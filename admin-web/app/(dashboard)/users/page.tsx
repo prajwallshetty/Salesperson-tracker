@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, MoreHorizontal, Pencil, Power, KeyRound, ShieldCheck } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Power, KeyRound, ShieldCheck, RefreshCw, ShieldAlert } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchInput } from "@/components/SearchInput";
@@ -15,10 +15,11 @@ import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UserModal } from "@/components/users/UserModal";
 import { EditUserModal } from "@/components/users/EditUserModal";
 import { ResetPasswordDialog } from "@/components/users/ResetPasswordDialog";
+import { AccessCodeControl } from "@/components/users/AccessCodeControl";
 import { formatDate } from "@/lib/format";
 import type { Paginated, UserAccount } from "@/types";
 
@@ -28,6 +29,7 @@ export default function UsersListPage() {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [isActive, setIsActive] = useState("");
+  const [accessCodeStatus, setAccessCodeStatus] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Paginated<UserAccount> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,15 +38,23 @@ export default function UsersListPage() {
   const [editing, setEditing] = useState<UserAccount | null>(null);
   const [resetting, setResetting] = useState<UserAccount | null>(null);
   const [toggling, setToggling] = useState<UserAccount | null>(null);
+  const [regenerating, setRegenerating] = useState<UserAccount | null>(null);
 
-  useEffect(() => setPage(1), [search, role, isActive]);
+  useEffect(() => setPage(1), [search, role, isActive, accessCodeStatus]);
 
   const load = () => {
     setLoading(true);
     setError(false);
     api
       .get("/users", {
-        params: { search: search || undefined, role: role || undefined, isActive: isActive || undefined, page, pageSize: PAGE_SIZE },
+        params: {
+          search: search || undefined,
+          role: role || undefined,
+          isActive: isActive || undefined,
+          accessCodeStatus: accessCodeStatus || undefined,
+          page,
+          pageSize: PAGE_SIZE,
+        },
       })
       .then((res) => setData(res.data))
       .catch((err) => {
@@ -54,7 +64,7 @@ export default function UsersListPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [search, role, isActive, page]);
+  useEffect(load, [search, role, isActive, accessCodeStatus, page]);
 
   const toggleActive = async (u: UserAccount) => {
     try {
@@ -66,16 +76,48 @@ export default function UsersListPage() {
     }
   };
 
+  const handleRegenerateCode = async (u: UserAccount) => {
+    try {
+      await api.post(`/users/${u.id}/access-code/regenerate`);
+      toast.success(`New access code generated for ${u.name}`);
+      setRegenerating(null);
+      load();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Failed to regenerate access code"));
+    }
+  };
+
+  const toggleAccessCodeEnabled = async (u: UserAccount) => {
+    const currentlyEnabled = u.salesperson?.accessCodeEnabled ?? true;
+    try {
+      await api.patch(`/users/${u.id}/access-code`, { enabled: !currentlyEnabled });
+      toast.success(`Access code ${currentlyEnabled ? "disabled" : "enabled"} for ${u.name}`);
+      load();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Failed to update access code status"));
+    }
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="Users & Roles"
-        description="Manage login accounts for admins and the field sales team."
-        actions={<Button onClick={() => setCreateOpen(true)}><Plus /> Add User</Button>}
+        description="Manage login accounts, roles, and field salesperson Access Codes."
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4 mr-1" /> Add User
+          </Button>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by name or email..." className="w-full max-w-xs" />
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search by name, email, phone..."
+          className="w-full max-w-xs"
+        />
+
         <FilterSelect
           value={role}
           onChange={setRole}
@@ -85,6 +127,7 @@ export default function UsersListPage() {
             { value: "SALESPERSON", label: "Salesperson" },
           ]}
         />
+
         <FilterSelect
           value={isActive}
           onChange={setIsActive}
@@ -94,6 +137,16 @@ export default function UsersListPage() {
             { value: "false", label: "Inactive" },
           ]}
         />
+
+        <FilterSelect
+          value={accessCodeStatus}
+          onChange={setAccessCodeStatus}
+          placeholder="Access code status"
+          options={[
+            { value: "ENABLED", label: "Access Code Enabled" },
+            { value: "DISABLED", label: "Access Code Disabled" },
+          ]}
+        />
       </div>
 
       <Table>
@@ -101,7 +154,8 @@ export default function UsersListPage() {
           <TableRow>
             <TableHead>User</TableHead>
             <TableHead>Role</TableHead>
-            <TableHead>Employee code</TableHead>
+            <TableHead>Access</TableHead>
+            <TableHead>Employee Code</TableHead>
             <TableHead>Territory</TableHead>
             <TableHead>Joined</TableHead>
             <TableHead>Status</TableHead>
@@ -110,10 +164,10 @@ export default function UsersListPage() {
         </TableHeader>
         <TableBody>
           {loading ? (
-            Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
+            Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
           ) : error ? (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={7} className="py-10">
+              <TableCell colSpan={8} className="py-10">
                 <EmptyState
                   icon={<ShieldCheck className="size-5" />}
                   title="Couldn't load users"
@@ -128,8 +182,12 @@ export default function UsersListPage() {
             </TableRow>
           ) : !data || data.items.length === 0 ? (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={7} className="py-10">
-                <EmptyState icon={<ShieldCheck className="size-5" />} title="No users found" message="Try adjusting your filters or add a new user." />
+              <TableCell colSpan={8} className="py-10">
+                <EmptyState
+                  icon={<ShieldCheck className="size-5" />}
+                  title="No users found"
+                  message="Try adjusting your search or filters."
+                />
               </TableCell>
             </TableRow>
           ) : (
@@ -140,21 +198,35 @@ export default function UsersListPage() {
                     <Avatar name={u.name} src={u.avatarUrl} size="sm" />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{u.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">{u.email || u.phone || "-"}</p>
                     </div>
                   </div>
                 </TableCell>
+
                 <TableCell>
                   <Badge variant={u.role === "ADMIN" ? "info" : "default"}>{u.role}</Badge>
                 </TableCell>
+
+                <TableCell>
+                  {u.role === "SALESPERSON" || u.salesperson ? (
+                    <AccessCodeControl userId={u.id} compact onUpdate={load} />
+                  ) : (
+                    <Badge variant="outline" className="text-[11px] text-muted-foreground font-normal">
+                      Admin Password
+                    </Badge>
+                  )}
+                </TableCell>
+
                 <TableCell className="text-muted-foreground">{u.salesperson?.employeeCode ?? "-"}</TableCell>
                 <TableCell className="text-muted-foreground">{u.salesperson?.territory?.name ?? "-"}</TableCell>
                 <TableCell className="text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
+
                 <TableCell>
                   <Badge variant={u.isActive ? "success" : "muted"} dot>
                     {u.isActive ? "Active" : "Inactive"}
                   </Badge>
                 </TableCell>
+
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -164,13 +236,29 @@ export default function UsersListPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => setEditing(u)}>
-                        <Pencil /> Edit
+                        <Pencil className="size-4 mr-2" /> Edit Details
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setResetting(u)}>
-                        <KeyRound /> Reset password
-                      </DropdownMenuItem>
+
+                      {u.role === "ADMIN" ? (
+                        <DropdownMenuItem onSelect={() => setResetting(u)}>
+                          <KeyRound className="size-4 mr-2" /> Reset Password
+                        </DropdownMenuItem>
+                      ) : (
+                        <>
+                          <DropdownMenuItem onSelect={() => setRegenerating(u)}>
+                            <RefreshCw className="size-4 mr-2" /> Regenerate Code
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => toggleAccessCodeEnabled(u)}>
+                            <ShieldAlert className="size-4 mr-2" />
+                            {u.salesperson?.accessCodeEnabled === false ? "Enable Access Code" : "Disable Access Code"}
+                          </DropdownMenuItem>
+                        </>
+                      )}
+
+                      <DropdownMenuSeparator />
+
                       <DropdownMenuItem destructive={u.isActive} onSelect={() => setToggling(u)}>
-                        <Power /> {u.isActive ? "Deactivate" : "Activate"}
+                        <Power className="size-4 mr-2" /> {u.isActive ? "Deactivate Account" : "Activate Account"}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -180,18 +268,20 @@ export default function UsersListPage() {
           )}
         </TableBody>
       </Table>
+
       {data && data.total > 0 && <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />}
 
       <UserModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
       <EditUserModal open={!!editing} user={editing} onClose={() => setEditing(null)} onSaved={load} />
-      <ResetPasswordDialog open={!!resetting} user={resetting} onClose={() => setResetting(null)} />
+      {resetting && <ResetPasswordDialog open={!!resetting} user={resetting} onClose={() => setResetting(null)} />}
+
       <ConfirmDialog
         open={!!toggling}
-        title={toggling?.isActive ? "Deactivate user?" : "Activate user?"}
+        title={toggling?.isActive ? "Deactivate user account?" : "Activate user account?"}
         message={
           toggling
             ? toggling.isActive
-              ? `${toggling.name} will be signed out immediately and unable to log back in until reactivated.`
+              ? `${toggling.name} will be signed out immediately and unable to log in until reactivated.`
               : `${toggling.name} will be able to log in again.`
             : ""
         }
@@ -199,6 +289,20 @@ export default function UsersListPage() {
         confirmLabel={toggling?.isActive ? "Deactivate" : "Activate"}
         onClose={() => setToggling(null)}
         onConfirm={() => (toggling ? toggleActive(toggling) : undefined)}
+      />
+
+      <ConfirmDialog
+        open={!!regenerating}
+        title="Regenerate Access Code?"
+        message={
+          regenerating
+            ? `The current access code for ${regenerating.name} will stop working immediately. Share the new code with them to log back into the Sales App.`
+            : ""
+        }
+        tone="danger"
+        confirmLabel="Regenerate Code"
+        onClose={() => setRegenerating(null)}
+        onConfirm={() => (regenerating ? handleRegenerateCode(regenerating) : undefined)}
       />
     </div>
   );

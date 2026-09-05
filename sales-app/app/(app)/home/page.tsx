@@ -157,13 +157,18 @@ export default function HomePage() {
   return (
     <motion.div variants={fadeIn} initial="hidden" animate="show" className="px-4 pb-6 pt-5">
       <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm text-muted-foreground">
-            {greeting()}, {firstName} 👋
-          </p>
-          <h1 className="mt-0.5 truncate text-xl font-extrabold tracking-tight text-foreground">
-            {user?.name ?? "Salesperson"}
-          </h1>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-card p-1.5 shadow-card overflow-hidden">
+            <img src="/logo.png" alt="SalesGrid Logo" className="h-full w-full object-contain" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">
+              {greeting()}, {firstName} 👋
+            </p>
+            <h1 className="mt-0.5 truncate text-lg font-extrabold tracking-tight text-foreground">
+              {user?.name ?? "Salesperson"}
+            </h1>
+          </div>
         </div>
         <Link
           href="/notifications"

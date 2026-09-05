@@ -83,7 +83,10 @@ export default function MorePage() {
           <MenuRow icon={<LogOut />} label="Log Out" danger onClick={() => setConfirmLogout(true)} />
         </div>
 
-        <p className="pt-2 text-center text-[11px] text-muted-foreground">SalesForce Pro Field App · v1.0</p>
+        <div className="pt-2 flex flex-col items-center justify-center gap-1 text-center">
+          <img src="/logo.png" alt="SalesGrid Logo" className="h-6 w-auto object-contain opacity-80" />
+          <p className="text-[11px] text-muted-foreground">SalesGrid Field App · v1.0</p>
+        </div>
       </div>
 
       <ConfirmDialog

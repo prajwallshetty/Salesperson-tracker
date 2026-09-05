@@ -26,6 +26,8 @@ interface EditUserModalProps {
   onSaved: () => void;
 }
 
+import { AccessCodeControl } from "@/components/users/AccessCodeControl";
+
 // Editing is intentionally narrow — PATCH /api/users/:id only accepts name/phone/isActive/role
 // (see API_CONTRACT.md), and role changes are rejected server-side once a linked Salesperson
 // record exists either way, so this form sticks to what's actually safe to change here.
@@ -59,17 +61,24 @@ export function EditUserModal({ open, user, onClose, onSaved }: EditUserModalPro
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Field label="Full name" required error={errors.name?.message}>
             <Input {...register("name")} />
           </Field>
           <Field label="Phone" error={errors.phone?.message}>
             <Input {...register("phone")} placeholder="+91 90000 00000" />
           </Field>
-          <p className="mb-2 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Email and role can&apos;t be changed here — create a new account for a different role.
           </p>
-          <DialogFooter className="mt-2">
+
+          {user && (user.role === "SALESPERSON" || user.salesperson) && (
+            <div className="pt-2">
+              <AccessCodeControl userId={user.id} onUpdate={onSaved} />
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
@@ -82,3 +91,4 @@ export function EditUserModal({ open, user, onClose, onSaved }: EditUserModalPro
     </Dialog>
   );
 }
+
