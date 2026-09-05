@@ -18,6 +18,13 @@
     --muted-foreground: 240 8% 46%;
     --success: 142 71% 40%;
     --success-soft: 142 76% 95%;
+    --warning: 38 92% 46%;
+    --warning-soft: 45 93% 94%;
+    --info: 217 91% 58%;
+    --info-soft: 214 95% 95%;
+    /* Pink/magenta - Enterprise-tier accent only; not used elsewhere in the app. */
+    --pink: 330 81% 55%;
+    --pink-soft: 330 85% 96%;
     --border: 240 18% 90%;
   }
 }

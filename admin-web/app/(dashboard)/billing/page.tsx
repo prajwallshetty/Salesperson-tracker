@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, CalendarClock, CreditCard, Users } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
@@ -44,6 +45,7 @@ const BLOCKED_BANNER: Partial<Record<TenantSubscription["status"], string>> = {
 
 export default function BillingPage() {
   const user = useAuthStore((s) => s.user);
+  const searchParams = useSearchParams();
   const [sub, setSub] = useState<TenantSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -62,6 +64,15 @@ export default function BillingPage() {
     return () => {
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Arriving here right after signup with a plan chosen on the pricing page (see app/signup) -
+  // open the picker straight away so the admin can finish checkout. The query param is only ever
+  // a UI hint for which dialog to open; POST /billing/checkout still resolves the real plan/price
+  // from the database, never from this URL.
+  useEffect(() => {
+    if (searchParams.get("plan")) setPickerOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -190,6 +201,8 @@ export default function BillingPage() {
           currentSalespersonCount={sub.usage.salespersons}
           admin={user}
           onCheckoutSubmitted={() => pollForUpdate()}
+          initialInterval={searchParams.get("interval") === "yearly" ? "YEARLY" : searchParams.get("interval") === "monthly" ? "MONTHLY" : undefined}
+          highlightPlanKey={searchParams.get("plan") ?? undefined}
         />
       )}
       <CancelSubscriptionDialog open={cancelOpen} onClose={() => setCancelOpen(false)} renewalDate={sub.currentPeriodEnd} onConfirm={handleCancel} />

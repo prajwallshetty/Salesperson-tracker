@@ -30,7 +30,7 @@ router.get(
   "/live",
   requireRole("ADMIN"),
   requireActiveSubscription(),
-  requireFeature("liveTracking"),
+  requireFeature("GPS_TRACKING"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const salespersons = await prisma.salesperson.findMany({
@@ -133,7 +133,7 @@ router.get(
 router.get(
   "/:salespersonId/field-work-sessions",
   requireActiveSubscription(),
-  requireFeature("routeHistory"),
+  requireFeature("ROUTE_ANALYTICS"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.salespersonId) {
@@ -154,7 +154,7 @@ router.get(
 router.get(
   "/:salespersonId/route",
   requireActiveSubscription(),
-  requireFeature("routeHistory"),
+  requireFeature("ROUTE_ANALYTICS"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.salespersonId) {

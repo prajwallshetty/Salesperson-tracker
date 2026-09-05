@@ -240,7 +240,7 @@ router.post(
   "/:id/targets",
   requireRole("ADMIN"),
   requireActiveSubscription(),
-  requireFeature("targets"),
+  requireFeature("TARGET_ANALYTICS"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const { period, periodStart, periodEnd, targetAmount } = z
@@ -270,7 +270,7 @@ router.post(
 router.get(
   "/:id/targets",
   requireActiveSubscription(),
-  requireFeature("targets"),
+  requireFeature("TARGET_ANALYTICS"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {

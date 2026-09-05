@@ -1,15 +1,31 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
 import { apiErrorMessage } from "@/lib/api";
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const signup = useAuthStore((s) => s.signup);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Which plan/interval the visitor picked on the pricing page, if any - carried through signup
+  // purely as a UI hint for where to land afterwards. Every tenant still starts on the same
+  // STARTER trial signup already creates (see POST /api/auth/signup); the actual plan/price for
+  // anything else is only ever resolved server-side when the new admin completes checkout on the
+  // billing page next, exactly like any other upgrade - this is never trusted as the real price.
+  const requestedPlan = searchParams.get("plan");
+  const requestedInterval = searchParams.get("interval") === "yearly" ? "yearly" : "monthly";
   const [companyName, setCompanyName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -24,7 +40,11 @@ export default function SignupPage() {
     try {
       await signup(companyName, name, email, password);
       toast.success("Workspace created!");
-      router.replace("/dashboard");
+      if (requestedPlan && requestedPlan.toUpperCase() !== "STARTER") {
+        router.replace(`/billing?plan=${encodeURIComponent(requestedPlan)}&interval=${requestedInterval}`);
+      } else {
+        router.replace("/dashboard");
+      }
     } catch (err) {
       setError(apiErrorMessage(err, "Could not create your workspace"));
     } finally {

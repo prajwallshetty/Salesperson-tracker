@@ -40,6 +40,18 @@ module.exports = {
           DEFAULT: "hsl(var(--success))",
           soft: "hsl(var(--success-soft))",
         },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          soft: "hsl(var(--warning-soft))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          soft: "hsl(var(--info-soft))",
+        },
+        pink: {
+          DEFAULT: "hsl(var(--pink))",
+          soft: "hsl(var(--pink-soft))",
+        },
       },
       borderRadius: {
         xl: "1.25rem",

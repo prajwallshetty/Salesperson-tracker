@@ -10,7 +10,7 @@ const router = Router();
 // router to ADMIN (per-salesperson target read/create already exists at
 // GET/POST /api/salespersons/:id/targets, available to admins and the salesperson themself -
 // gated the same way there for consistency).
-router.use(requireAuth, requireRole("ADMIN"), requireActiveSubscription(), requireFeature("targets"));
+router.use(requireAuth, requireRole("ADMIN"), requireActiveSubscription(), requireFeature("TARGET_ANALYTICS"));
 
 router.get(
   "/",

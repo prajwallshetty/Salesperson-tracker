@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "./prisma";
 import { asyncHandler } from "../utils/asyncHandler";
+import { FEATURE_CATALOG } from "./featureEntitlements";
+
+const FEATURE_LABELS = new Map(FEATURE_CATALOG.map((f) => [f.key, f.label]));
 
 export class PlanLimitError extends Error {
   status = 402;
@@ -19,12 +22,10 @@ export class SubscriptionRequiredError extends Error {
 }
 
 function humanizeFeatureKey(feature: string): string {
-  // Feature keys are camelCase (liveTracking, routeHistory) - split before each capital, not
-  // just on underscores, or "routeHistory" renders as the illegible "routehistory".
-  return feature
-    .replace(/_/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase();
+  // Feature keys are the UPPER_SNAKE_CASE entitlement constants in lib/featureEntitlements.ts -
+  // prefer that catalog's human label; fall back to a simple underscore-to-space/lowercase
+  // rendering for a key that isn't in the catalog (shouldn't normally happen).
+  return FEATURE_LABELS.get(feature)?.toLowerCase() ?? feature.replace(/_/g, " ").toLowerCase();
 }
 
 export class FeatureNotAvailableError extends Error {

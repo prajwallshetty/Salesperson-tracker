@@ -1,21 +1,25 @@
 import { Container } from "../Container";
 import { SectionHeading } from "../SectionHeading";
 import { PricingGrid } from "./PricingGrid";
+import { PricingComparisonTable } from "./PricingComparisonTable";
 import { Button } from "../Button";
-import type { PublicPlan } from "@/lib/plans";
+import type { PublicPlan, FeatureCatalogEntry } from "@/lib/plans";
 
-export function Pricing({ plans }: { plans: PublicPlan[] }) {
+export function Pricing({ plans, featureCatalog }: { plans: PublicPlan[]; featureCatalog: FeatureCatalogEntry[] }) {
   return (
     <section id="pricing" className="scroll-mt-16 py-20 sm:py-28">
       <Container>
         <SectionHeading
-          eyebrow="Pricing"
-          title="Simple pricing that scales with your team."
-          description="Every plan includes the full workflow — visits, leads, targets, orders and reports. Upgrade any time as your team grows."
+          eyebrow="Pricing Plans"
+          title="Simple, Transparent Pricing"
+          description="Choose the perfect field sales tracking and sales force management software plan for your team. Every plan includes the full sales CRM workflow — GPS-verified visits, leads, targets, orders and reports."
         />
         <div className="mt-14">
           {plans.length > 0 ? (
-            <PricingGrid plans={plans} />
+            <>
+              <PricingGrid plans={plans} featureCatalog={featureCatalog} />
+              <PricingComparisonTable plans={plans} featureCatalog={featureCatalog} />
+            </>
           ) : (
             <div className="mx-auto max-w-md rounded-2xl border border-border/70 bg-card p-8 text-center shadow-card">
               <p className="text-sm text-muted-foreground">
