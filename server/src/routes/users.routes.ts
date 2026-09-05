@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
+import { parseEnumQuery } from "../utils/enumQuery";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { hashPassword } from "../lib/auth";
 import { createSalespersonAccount } from "../services/accounts";
@@ -16,7 +18,7 @@ router.get(
     const tenantId = req.auth!.tenantId;
     const { role, isActive, search, page = "1", pageSize = "20" } = req.query as Record<string, string>;
     const where: any = { tenantId };
-    if (role) where.role = role;
+    if (role) where.role = parseEnumQuery(role, Role, "role");
     if (isActive !== undefined) where.isActive = isActive === "true";
     if (search) {
       where.OR = [

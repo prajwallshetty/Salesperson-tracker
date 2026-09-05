@@ -2,9 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import multer from "multer";
 import path from "path";
+import { VisitStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { resolveOwningSalespersonId } from "../lib/owningSalesperson";
 import { asyncHandler } from "../utils/asyncHandler";
+import { parseEnumQuery } from "../utils/enumQuery";
 import { requireAuth } from "../middleware/auth";
 import { notifyAdmins } from "../services/notifications";
 import { SAFE_USER_SELECT } from "../lib/selects";
@@ -49,7 +51,7 @@ router.get(
     const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
-    if (status) where.status = status;
+    if (status) where.status = parseEnumQuery(status, VisitStatus, "status");
     if (outcome) where.outcome = outcome;
     if (customerId) where.customerId = customerId;
     // dateFrom/dateTo are aliases for from/to (either name works) - kept both so existing

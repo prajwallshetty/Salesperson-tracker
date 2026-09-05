@@ -34,8 +34,12 @@ function handleBillingError(err: unknown, res: import("express").Response) {
   return null;
 }
 
+// ADMIN-only like the checkout/cancel routes below: this returns the tenant's plan, price,
+// seat limit, usage and trial/renewal dates, which is workspace-owner information. The
+// salesperson app never calls it - only admin-web's billing page does.
 router.get(
   "/subscription",
+  requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const subscription = await getTenantSubscription(tenantId);

@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
+import { DocumentStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { resolveOwningSalespersonId } from "../lib/owningSalesperson";
 import { asyncHandler } from "../utils/asyncHandler";
+import { parseEnumQuery } from "../utils/enumQuery";
 import { requireAuth } from "../middleware/auth";
 import { computeLine, computeDocumentTotals, resolvePricingForItems } from "../services/pricing";
 import { docNumber } from "../utils/geo";
@@ -20,7 +22,7 @@ router.get(
     const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
-    if (status) where.status = status;
+    if (status) where.status = parseEnumQuery(status, DocumentStatus, "status");
     if (customerId) where.customerId = customerId;
     const quotations = await prisma.quotation.findMany({
       where,

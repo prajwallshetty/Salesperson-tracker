@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import { LeadStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
+import { parseEnumQuery } from "../utils/enumQuery";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();
@@ -15,7 +17,7 @@ router.get(
     const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
-    if (status) where.status = status;
+    if (status) where.status = parseEnumQuery(status, LeadStatus, "status");
     if (search) where.name = { contains: search, mode: "insensitive" };
     const take = limit ? Math.min(parseInt(limit, 10) || 0, 200) || undefined : undefined;
     const leads = await prisma.lead.findMany({

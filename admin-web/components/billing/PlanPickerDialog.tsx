@@ -56,7 +56,10 @@ export function PlanPickerDialog({
 
   const handleSelect = async (plan: PublicPlan) => {
     if (plan.monthlyPrice === 0) {
-      window.location.href = "mailto:growthbridge16@gmail.com?subject=Sales%20Grid%20Enterprise";
+      // assign() rather than `location.href = ...`: identical navigation, but the assignment
+      // form trips react-hooks/immutability (it reads as mutating an external value), which was
+      // the one hard error in `npm run lint`.
+      window.location.assign("mailto:growthbridge16@gmail.com?subject=Sales%20Grid%20Enterprise");
       return;
     }
     setBusyKey(plan.key);

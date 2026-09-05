@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import { EmploymentStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
+import { parseEnumQuery } from "../utils/enumQuery";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireActiveSubscription, requireFeature } from "../lib/entitlements";
 import { createSalespersonAccount } from "../services/accounts";
@@ -20,7 +22,7 @@ router.get(
     const tenantId = req.auth!.tenantId;
     const { status, territoryId, managerId, search, page = "1", pageSize = "20" } = req.query as Record<string, string>;
     const where: any = { tenantId };
-    if (status) where.status = status;
+    if (status) where.status = parseEnumQuery(status, EmploymentStatus, "status");
     if (territoryId) where.territoryId = territoryId;
     if (managerId) where.managerId = managerId;
     if (search) {

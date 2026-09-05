@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import { FollowUpStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
+import { parseEnumQuery } from "../utils/enumQuery";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();
@@ -20,7 +22,7 @@ router.get(
       where.status = "PENDING";
       where.dueDate = { lt: new Date() };
     } else if (status) {
-      where.status = status;
+      where.status = parseEnumQuery(status, FollowUpStatus, "status");
     }
 
     const followUps = await prisma.followUp.findMany({

@@ -158,9 +158,9 @@ export const SalesGridMap = forwardRef<SalesGridMapHandle, SalesGridMapProps>(fu
   return (
     <div className={cn("relative", className)}>
       <div ref={containerRef} className="absolute inset-0" />
+      {/* Bottom-left: the top edge is occupied by the geocode search box and the map controls,
+          the bottom-right by MapLibre's attribution. */}
       {tileError && (
-        {/* Bottom-left: the top edge is occupied by the geocode search box and the map
-            controls, the bottom-right by MapLibre's attribution. */}
         <div className="pointer-events-none absolute bottom-0 left-0 z-10 p-2">
           <span className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning shadow-sm">
             <AlertTriangle className="size-3.5 shrink-0" />
