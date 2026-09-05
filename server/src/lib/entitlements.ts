@@ -1,10 +1,37 @@
+import { Request, Response, NextFunction } from "express";
 import { prisma } from "./prisma";
+import { asyncHandler } from "../utils/asyncHandler";
 
 export class PlanLimitError extends Error {
   status = 402;
   constructor(message: string) {
     super(message);
     this.name = "PlanLimitError";
+  }
+}
+
+export class SubscriptionRequiredError extends Error {
+  status = 402;
+  constructor(message: string) {
+    super(message);
+    this.name = "SubscriptionRequiredError";
+  }
+}
+
+function humanizeFeatureKey(feature: string): string {
+  // Feature keys are camelCase (liveTracking, routeHistory) - split before each capital, not
+  // just on underscores, or "routeHistory" renders as the illegible "routehistory".
+  return feature
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+}
+
+export class FeatureNotAvailableError extends Error {
+  status = 403;
+  constructor(feature: string, planName: string) {
+    super(`${humanizeFeatureKey(feature)} is not included in your ${planName} plan. Upgrade your plan to use this feature.`);
+    this.name = "FeatureNotAvailableError";
   }
 }
 
@@ -52,4 +79,73 @@ export async function hasFeature(tenantId: string, feature: string): Promise<boo
     return Boolean((features as Record<string, unknown>)[feature]);
   }
   return false;
+}
+
+// TRIALING/ACTIVE/PAST_DUE all still get paid functionality - PAST_DUE is Razorpay's own retry
+// window on a failed charge (see subscriptionStatusMap.ts), not an immediate cutoff, matching
+// how most subscription billing products give a grace period rather than an instant lockout.
+// CANCELLED/EXPIRED/SUSPENDED do not - see requireActiveSubscription below for the messages
+// shown for each.
+const USABLE_STATUSES = new Set(["TRIALING", "ACTIVE", "PAST_DUE"]);
+
+function subscriptionBlockedMessage(status: string): string {
+  switch (status) {
+    case "EXPIRED":
+      return "Your trial has expired. Choose a plan to continue.";
+    case "CANCELLED":
+      return "Your subscription has been cancelled. Reactivate to continue.";
+    case "SUSPENDED":
+      return "Your subscription needs attention. Contact billing to restore access.";
+    default:
+      return "Subscription required.";
+  }
+}
+
+/**
+ * Centralized subscription/entitlement middleware (task requirement: "Do not duplicate
+ * subscription checks in every API route"). Composed as
+ * requireAuth -> requireActiveSubscription()/requireFeature(...) -> route handler.
+ * Deliberately does NOT block GET-only account/billing endpoints - a tenant on an expired
+ * subscription must still be able to see their own billing status and upgrade, per the task's
+ * "never lock a tenant out of Billing/Settings" rule; call this only on routes that represent
+ * paid product functionality, not on the billing routes themselves.
+ */
+export function requireActiveSubscription() {
+  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const subscription = await getTenantSubscription(req.auth!.tenantId);
+    if (!USABLE_STATUSES.has(subscription.status)) {
+      throw new SubscriptionRequiredError(subscriptionBlockedMessage(subscription.status));
+    }
+    next();
+  });
+}
+
+/** Gates one named feature (see SubscriptionPlan.features) behind the tenant's plan. */
+export function requireFeature(feature: string) {
+  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const subscription = await getTenantSubscription(req.auth!.tenantId);
+    if (!USABLE_STATUSES.has(subscription.status)) {
+      throw new SubscriptionRequiredError(subscriptionBlockedMessage(subscription.status));
+    }
+    const features = subscription.plan.features;
+    const enabled =
+      features && typeof features === "object" && !Array.isArray(features)
+        ? Boolean((features as Record<string, unknown>)[feature])
+        : false;
+    if (!enabled) throw new FeatureNotAvailableError(feature, subscription.plan.name);
+    next();
+  });
+}
+
+/**
+ * Express-middleware form of assertCanAddSalesperson, for any future salesperson-creation route
+ * that doesn't go through services/accounts.ts (which already calls the function form directly).
+ */
+export function requirePlanLimit(resource: "salespersons") {
+  return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+    if (resource === "salespersons") {
+      await assertCanAddSalesperson(req.auth!.tenantId);
+    }
+    next();
+  });
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { requireActiveSubscription, requireFeature } from "../lib/entitlements";
 import { haversineKm } from "../utils/geo";
 import { startOfDay, endOfDay } from "../utils/dates";
 import { notifyAdmins } from "../services/notifications";
@@ -27,6 +28,8 @@ function isEffectivelyOnline(sp: { isOnline: boolean; lastSeenAt: Date | null })
 router.get(
   "/live",
   requireRole("ADMIN"),
+  requireActiveSubscription(),
+  requireFeature("liveTracking"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const salespersons = await prisma.salesperson.findMany({
@@ -126,6 +129,8 @@ router.get(
 
 router.get(
   "/:salespersonId/route",
+  requireActiveSubscription(),
+  requireFeature("routeHistory"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.salespersonId) {

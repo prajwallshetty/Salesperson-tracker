@@ -26,6 +26,17 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum AuditActorType {
+  PLATFORM_ADMIN
+  TENANT_ADMIN
+  SYSTEM
+}
+
 enum EmploymentStatus {
   ACTIVE
   INACTIVE
@@ -152,17 +163,25 @@ model PlatformAdmin {
 // plan catalog. `features` is a flat map of feature-key -> boolean/limit consulted by
 // lib/entitlements.ts instead of hard-coding plan checks at each call site.
 model SubscriptionPlan {
-  id              String   @id @default(cuid())
-  key             String   @unique
-  name            String
-  monthlyPrice    Float
-  annualPrice     Float?
-  maxSalespersons Int
-  maxAdmins       Int
-  features        Json     @default("{}")
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  key                   String   @unique
+  name                  String
+  description           String?
+  monthlyPrice          Float
+  annualPrice           Float?
+  maxSalespersons       Int
+  maxAdmins             Int
+  features              Json     @default("{}")
+  trialDays             Int      @default(14)
+  isActive              Boolean  @default(true)
+  // Razorpay Plan ids this Sales Grid plan maps to (one per billing interval) - created/managed
+  // out of band via scripts/setup-razorpay-plans.ts, never created dynamically at checkout time.
+  // Null until that setup script has been run against a real Razorpay account, so a plan can
+  // exist and be shown on pricing pages before Razorpay is configured for it.
+  razorpayMonthlyPlanId String?
+  razorpayYearlyPlanId  String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   subscriptions Subscription[]
 }
@@ -178,17 +197,76 @@ model Subscription {
   planId                 String
   plan                   SubscriptionPlan   @relation(fields: [planId], references: [id])
   status                 SubscriptionStatus @default(TRIALING)
+  billingInterval        BillingInterval    @default(MONTHLY)
   billingProvider        String?
   providerCustomerId     String?
   providerSubscriptionId String?
   currentPeriodStart     DateTime           @default(now())
   currentPeriodEnd       DateTime?
+  trialStart             DateTime?
+  trialEnd               DateTime?
   cancelAtPeriodEnd      Boolean            @default(false)
+  cancelledAt            DateTime?
+  endedAt                DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
   @@index([planId])
   @@index([status])
+}
+
+// One Razorpay customer per tenant, reused across subscription changes/renewals so a tenant
+// never accumulates duplicate Razorpay customers. Subscription.providerCustomerId caches the
+// current razorpayCustomerId for the enforcement hot path; this table is the source of truth
+// and survives a plan change or re-subscription.
+model BillingCustomer {
+  id                 String   @id @default(cuid())
+  tenantId           String   @unique
+  razorpayCustomerId String   @unique
+  email              String
+  name               String
+  phone              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// Raw Razorpay webhook deliveries. `eventId` (Razorpay's `payload.*.entity.id` + event type, or
+// the `x-razorpay-event-id` header when present) is the idempotency key - see
+// services/razorpayWebhook.ts. A webhook retried by Razorpay (network blip, non-2xx response)
+// must never be processed twice; checking/inserting this row inside the same transaction as the
+// resulting subscription update is what guarantees that.
+model BillingEvent {
+  id          String    @id @default(cuid())
+  provider    String    @default("razorpay")
+  eventId     String    @unique
+  eventType   String
+  payload     Json
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([eventType])
+  @@index([processed])
+}
+
+// Append-only record of billing-affecting actions, for support/dispute investigation - who
+// (platform admin, tenant admin, or the system reacting to a webhook) did what, and the
+// before/after state. Never updated or deleted.
+model BillingAuditLog {
+  id              String         @id @default(cuid())
+  tenantId        String
+  actorType       AuditActorType
+  actorId         String?
+  action          String
+  previousState   Json?
+  newState        Json?
+  providerEventId String?
+  createdAt       DateTime       @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([action])
 }
 
 model User {

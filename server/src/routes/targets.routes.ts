@@ -3,12 +3,14 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { requireActiveSubscription, requireFeature } from "../lib/entitlements";
 
 const router = Router();
 // Admin-wide target listing/editing exposes every salesperson's targets, so gate the whole
 // router to ADMIN (per-salesperson target read/create already exists at
-// GET/POST /api/salespersons/:id/targets, available to admins and the salesperson themself).
-router.use(requireAuth, requireRole("ADMIN"));
+// GET/POST /api/salespersons/:id/targets, available to admins and the salesperson themself -
+// gated the same way there for consistency).
+router.use(requireAuth, requireRole("ADMIN"), requireActiveSubscription(), requireFeature("targets"));
 
 router.get(
   "/",

@@ -28,6 +28,8 @@ import attendanceRoutes from "./routes/attendance.routes";
 import usersRoutes from "./routes/users.routes";
 import platformRoutes from "./routes/platform.routes";
 import publicRoutes from "./routes/public.routes";
+import billingRoutes from "./routes/billing.routes";
+import razorpayWebhookRoutes from "./routes/razorpayWebhook.routes";
 
 import { setIO } from "./sockets/io";
 import { registerLocationSocket } from "./sockets/locationSocket";
@@ -69,6 +71,12 @@ app.use(
     credentials: true,
   })
 );
+
+// Mounted before express.json() - this route needs the exact raw request bytes to verify
+// Razorpay's webhook signature (see routes/razorpayWebhook.routes.ts's top comment). Every
+// other route needs a parsed JSON body, which is why this one line has to come first.
+app.use("/api/billing/razorpay", razorpayWebhookRoutes);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(redactAccessCode);
@@ -98,6 +106,7 @@ app.use("/api/targets", targetsRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/platform", platformRoutes);
+app.use("/api/billing", billingRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.name === "ZodError") {
