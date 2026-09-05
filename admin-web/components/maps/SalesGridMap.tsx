@@ -53,7 +53,12 @@ export const SalesGridMap = forwardRef<SalesGridMapHandle, SalesGridMapProps>(fu
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  /** Fatal only: the map could not be created or its style never loaded, so there is nothing
+   * to show. Replaces the map with a retry card. */
   const [error, setError] = useState<string | null>(null);
+  /** Non-fatal: basemap imagery isn't loading (tile requests failing), but the map itself is
+   * alive - markers, route lines and every caller-added layer still render and stay usable. */
+  const [tileError, setTileError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useImperativeHandle(ref, () => ({ getMap: () => mapRef.current }), []);
@@ -87,18 +92,37 @@ export const SalesGridMap = forwardRef<SalesGridMapHandle, SalesGridMapProps>(fu
       }
     }
 
-    // MapLibre emits a generic "error" event for style/tile/network failures alike -
-    // surface it once instead of leaving a blank grey tile with no explanation.
-    let reported = false;
+    // MapLibre emits one generic "error" event for style, tile and network failures alike.
+    // These must NOT be treated the same: a single failed tile request (one flaky CDN
+    // response, a 404 tile at high zoom, a rate-limited burst while panning) is routine and
+    // recoverable - MapLibre re-requests as the user moves. Tearing the map down for one of
+    // those would destroy every marker, route line and layer the caller added via getMap(),
+    // which is far worse than a missing tile. So only a failure that leaves nothing to show
+    // (style never loaded / map never came up) is fatal; tile failures show a non-blocking
+    // banner over a still-working map.
+    let loaded = false;
+    let tileFailureReported = false;
+    let fatalReported = false;
     map.on("error", (e) => {
-      if (reported) return;
-      reported = true;
       const msg = (e?.error as { message?: string } | undefined)?.message ?? "";
+      const isTileFailure = Boolean((e as { sourceId?: string } | undefined)?.sourceId) || loaded;
+      if (isTileFailure) {
+        if (tileFailureReported) return;
+        tileFailureReported = true;
+        console.warn("MapLibre basemap tile error (map still usable):", msg || e);
+        setTileError(true);
+        return;
+      }
+      if (fatalReported) return;
+      fatalReported = true;
       console.error("MapLibre error:", msg || e);
       setError("Map failed to load. Check your network connection and try again.");
     });
 
-    map.on("load", () => onLoad?.(map));
+    map.on("load", () => {
+      loaded = true;
+      onLoad?.(map);
+    });
     mapRef.current = map;
 
     return () => {
@@ -131,5 +155,19 @@ export const SalesGridMap = forwardRef<SalesGridMapHandle, SalesGridMapProps>(fu
     );
   }
 
-  return <div ref={containerRef} className={className} />;
+  return (
+    <div className={cn("relative", className)}>
+      <div ref={containerRef} className="absolute inset-0" />
+      {tileError && (
+        {/* Bottom-left: the top edge is occupied by the geocode search box and the map
+            controls, the bottom-right by MapLibre's attribution. */}
+        <div className="pointer-events-none absolute bottom-0 left-0 z-10 p-2">
+          <span className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning shadow-sm">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            Basemap imagery unavailable - positions are still live
+          </span>
+        </div>
+      )}
+    </div>
+  );
 });

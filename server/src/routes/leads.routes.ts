@@ -35,14 +35,22 @@ const leadSchema = z.object({
   company: z.string().optional(),
   source: z.string().optional(),
   notes: z.string().optional(),
+  salespersonId: z.string().min(1).optional(),
 });
 
 router.post(
   "/",
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
-    const data = leadSchema.parse(req.body);
-    const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+    const { salespersonId: requestedSalespersonId, ...data } = leadSchema.parse(req.body);
+    // A Lead has a required salesperson relation. A SALESPERSON always owns their own lead;
+    // an ADMIN has to name one. Missing it must fail here with a clear 400: previously an
+    // absent id fell through to `findFirst({ where: { id: undefined, tenantId } })`, and
+    // Prisma treats an `undefined` field as "don't filter on this at all" - so the ownership
+    // check matched an arbitrary salesperson of the tenant, passed, and `lead.create` then
+    // threw an unhandled PrismaClientValidationError that surfaced as a 500.
+    const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : requestedSalespersonId;
+    if (!salespersonId) return res.status(400).json({ error: "Select a salesperson to own this lead" });
     if (req.auth!.role === "ADMIN") {
       const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
       if (!owner) return res.status(400).json({ error: "Salesperson not found" });

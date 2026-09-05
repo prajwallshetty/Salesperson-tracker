@@ -60,14 +60,37 @@ const priceListSchema = z.object({
   effectiveTo: z.string().optional().nullable(),
 });
 
+/**
+ * A price list points at a product and optionally narrows to a territory or a customer - all
+ * three ids come straight from the request body, so each has to be proven to belong to the
+ * caller's tenant before it reaches Prisma. Otherwise a price rule can be created/updated
+ * against another tenant's territory or customer just by supplying its id.
+ * Returns an error message, or null when every supplied ref is valid.
+ */
+async function invalidTenantRef(tenantId: string, data: { productId?: string; territoryId?: string | null; customerId?: string | null }) {
+  if (data.productId) {
+    const product = await prisma.product.findFirst({ where: { id: data.productId, tenantId }, select: { id: true } });
+    if (!product) return "Product not found";
+  }
+  if (data.territoryId) {
+    const territory = await prisma.territory.findFirst({ where: { id: data.territoryId, tenantId }, select: { id: true } });
+    if (!territory) return "Territory not found";
+  }
+  if (data.customerId) {
+    const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId }, select: { id: true } });
+    if (!customer) return "Customer not found";
+  }
+  return null;
+}
+
 router.post(
   "/",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const data = priceListSchema.parse(req.body);
-    const product = await prisma.product.findFirst({ where: { id: data.productId, tenantId } });
-    if (!product) return res.status(400).json({ error: "Product not found" });
+    const refError = await invalidTenantRef(tenantId, data);
+    if (refError) return res.status(400).json({ error: refError });
 
     const priceList = await prisma.priceList.create({
       data: {
@@ -97,6 +120,8 @@ router.patch(
     const data = updateSchema.parse(req.body);
     const existing = await prisma.priceList.findFirst({ where: { id: req.params.id, tenantId } });
     if (!existing) return res.status(404).json({ error: "Not found" });
+    const refError = await invalidTenantRef(tenantId, data);
+    if (refError) return res.status(400).json({ error: refError });
     const priceList = await prisma.priceList.update({
       where: { id: req.params.id },
       data: {

@@ -29,7 +29,10 @@ export function NearbyMap({ currentPosition, customers, onSelectCustomer, classN
   const mapRef = useRef<maplibregl.Map | null>(null);
   const meMarkerRef = useRef<maplibregl.Marker | null>(null);
   const customerMarkersRef = useRef<maplibregl.Marker[]>([]);
+  /** Fatal only: nothing to show (map could not be created / style never loaded). */
   const [error, setError] = useState<string | null>(null);
+  /** Non-fatal: basemap tiles aren't loading, but the map and its markers still work. */
+  const [tileError, setTileError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -51,19 +54,43 @@ export function NearbyMap({ currentPosition, customers, onSelectCustomer, classN
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
-    let reported = false;
+    // A failed basemap tile is routine and recoverable (flaky CDN response, a 404 tile, a
+    // rate-limited burst while panning) - it must not tear the map down, which would also
+    // wipe the "you are here" and customer markers. Only a failure that leaves nothing to
+    // show at all is fatal. Mirrors admin-web's SalesGridMap.
+    let loaded = false;
+    let tileFailureReported = false;
+    let fatalReported = false;
     map.on("error", (e) => {
-      if (reported) return;
-      reported = true;
       const msg = (e?.error as { message?: string } | undefined)?.message ?? "";
+      const isTileFailure = Boolean((e as { sourceId?: string } | undefined)?.sourceId) || loaded;
+      if (isTileFailure) {
+        if (tileFailureReported) return;
+        tileFailureReported = true;
+        console.warn("MapLibre basemap tile error (map still usable):", msg || e);
+        setTileError(true);
+        return;
+      }
+      if (fatalReported) return;
+      fatalReported = true;
       console.error("MapLibre error:", msg || e);
       setError("Map failed to load. Check your network connection and try again.");
+    });
+
+    map.on("load", () => {
+      loaded = true;
     });
 
     mapRef.current = map;
     return () => {
       map.remove();
       mapRef.current = null;
+      // The markers below belong to the map instance just destroyed. Without clearing these
+      // refs, a Retry rebuilds the map but the marker effects see a non-null meMarkerRef and
+      // only call setLngLat() on a marker attached to the removed map - so "you are here"
+      // (and the stale customer markers) never come back on the new one.
+      meMarkerRef.current = null;
+      customerMarkersRef.current = [];
     };
     // Re-runs only on Retry - subsequent position/customer changes are applied imperatively below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +107,9 @@ export function NearbyMap({ currentPosition, customers, onSelectCustomer, classN
     } else {
       meMarkerRef.current = new maplibregl.Marker({ element: el }).setLngLat([currentPosition.lng, currentPosition.lat]).addTo(map);
     }
-  }, [currentPosition.lat, currentPosition.lng]);
+    // retryCount: after a Retry the map is a brand-new instance with no markers on it, so this
+    // has to run again to attach "you are here" to it.
+  }, [currentPosition.lat, currentPosition.lng, retryCount]);
 
   // Rebuild customer markers whenever the nearby list changes (radius change, refresh).
   useEffect(() => {
@@ -101,7 +130,8 @@ export function NearbyMap({ currentPosition, customers, onSelectCustomer, classN
           .setPopup(new maplibregl.Popup({ offset: 16 }).setText(c.name))
           .addTo(map);
       });
-  }, [customers, onSelectCustomer]);
+    // retryCount: same reason as above - re-attach customer markers to the rebuilt map.
+  }, [customers, onSelectCustomer, retryCount]);
 
   if (error) {
     return (
@@ -124,5 +154,17 @@ export function NearbyMap({ currentPosition, customers, onSelectCustomer, classN
     );
   }
 
-  return <div ref={containerRef} className={className} />;
+  return (
+    <div className={cn("relative", className)}>
+      <div ref={containerRef} className="absolute inset-0" />
+      {tileError && (
+        <div className="pointer-events-none absolute bottom-0 left-0 z-10 p-2">
+          <span className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning shadow-sm">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            Map imagery unavailable
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }

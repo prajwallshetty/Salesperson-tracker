@@ -143,8 +143,19 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   if (err?.name === "ZodError") {
     return res.status(400).json({ error: "Validation error", details: err.errors });
   }
+
   console.error(err);
-  res.status(err?.status || 500).json({ error: err?.message || "Internal server error" });
+
+  // Only errors a route deliberately tagged with a status carry a message meant for the
+  // client. Everything else is an unexpected failure whose message is internal detail - a
+  // PrismaClientValidationError, for instance, spells out the failing query, its arguments
+  // and the absolute source path of the route that threw it, and returning that verbatim
+  // handed all of it to any caller who could trigger the error.
+  const status = typeof err?.status === "number" ? err.status : 500;
+  if (status >= 500) {
+    return res.status(status).json({ error: "Something went wrong on our end. Please try again." });
+  }
+  res.status(status).json({ error: err?.message || "Request failed" });
 });
 
 const PORT = Number(process.env.PORT) || 4000;

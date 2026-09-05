@@ -253,6 +253,19 @@ router.post(
 
     const salespersonId = req.auth!.salespersonId!;
     const result = await recordLocationPing(req.auth!.tenantId, salespersonId, { lat, lng, speed, accuracy, heading, recordedAt });
+
+    // A rejected ping must not answer 201 - the client can't tell success from silent discard,
+    // and in the no_active_session case it needs to know to stop its watcher rather than keep
+    // firing forever. "duplicate" is the one benign rejection: the point was intentionally
+    // coalesced, nothing is wrong, so it stays a success.
+    if (!result.stored) {
+      const status =
+        result.reason === "rate_limited" ? 429
+        : result.reason === "no_active_session" ? 409
+        : result.reason === "duplicate" ? 200
+        : 400;
+      return res.status(status).json(result);
+    }
     res.status(201).json(result);
   })
 );
@@ -430,6 +443,30 @@ export async function recordLocationPing(tenantId: string, salespersonId: string
     }),
   ]);
 
+  // Every stored point must belong to a shift. A live point belongs to the ACTIVE session; a
+  // point flushed from the offline queue after the shift ended still belongs to whichever
+  // session was running at the moment it was recorded, so fall back to a time-window match
+  // rather than dropping genuinely-collected history.
+  //
+  // Anything matching neither is a stray - most commonly a watcher the client failed to clear
+  // after End Field Work. Those must be rejected outright: storing them kept flipping
+  // `isOnline` back to true and refreshing `lastSeenAt`, so a salesperson who had ended their
+  // shift stayed lit up as online on the admin map indefinitely (fieldWorkStatus "ENDED" while
+  // isOnline stayed true - a state that should not be reachable).
+  let session = activeSession;
+  if (!session) {
+    session = await prisma.fieldWorkSession.findFirst({
+      where: { salespersonId, startedAt: { lte: recordedAt }, endedAt: { gte: recordedAt } },
+      orderBy: { startedAt: "desc" },
+    });
+  }
+  if (!session) {
+    return { stored: false, reason: "no_active_session" as const };
+  }
+  // Only a point from the shift that is running right now reflects where this salesperson is
+  // *now*; a backfilled one must never move their live presence.
+  const isLivePoint = Boolean(activeSession);
+
   // Skip near-duplicate points (< 5m and < 3s apart) to avoid noisy buffered bursts.
   if (last) {
     const dKm = haversineKm(last.lat, last.lng, input.lat, input.lng);
@@ -456,7 +493,7 @@ export async function recordLocationPing(tenantId: string, salespersonId: string
       data: {
         tenantId,
         salespersonId,
-        fieldWorkSessionId: activeSession?.id,
+        fieldWorkSessionId: session.id,
         lat: input.lat,
         lng: input.lng,
         speed: input.speed,
@@ -466,32 +503,30 @@ export async function recordLocationPing(tenantId: string, salespersonId: string
         recordedAt,
       },
     }),
+    // A backfilled point updates the shift's distance but never the "where are they now"
+    // cache or the online flag - only a live point does.
     suspicious
       ? prisma.salesperson.update({
           where: { id: salespersonId },
-          data: { lastSeenAt: recordedAt, isOnline: true },
+          data: isLivePoint ? { lastSeenAt: recordedAt, isOnline: true } : {},
           include: { user: { select: { name: true } } },
         })
       : prisma.salesperson.update({
           where: { id: salespersonId },
           data: {
-            lastLat: input.lat,
-            lastLng: input.lng,
-            lastSpeed: input.speed,
-            lastSeenAt: recordedAt,
-            isOnline: true,
+            ...(isLivePoint
+              ? { lastLat: input.lat, lastLng: input.lng, lastSpeed: input.speed, lastSeenAt: recordedAt, isOnline: true }
+              : {}),
             todayDistanceKm: { increment: incrementKm },
           },
           include: { user: { select: { name: true } } },
         }),
-    activeSession && !suspicious
+    !suspicious
       ? prisma.fieldWorkSession.update({
-          where: { id: activeSession.id },
+          where: { id: session.id },
           data: { lastLocationAt: recordedAt, totalDistanceMeters: { increment: incrementKm * 1000 } },
         })
-      : activeSession
-        ? prisma.fieldWorkSession.update({ where: { id: activeSession.id }, data: { lastLocationAt: recordedAt } })
-        : Promise.resolve(null),
+      : prisma.fieldWorkSession.update({ where: { id: session.id }, data: { lastLocationAt: recordedAt } }),
   ]);
 
   if (suspicious) {
@@ -502,6 +537,12 @@ export async function recordLocationPing(tenantId: string, salespersonId: string
       `[gps] flagged suspicious jump for salesperson ${salespersonId}: ${distanceKm.toFixed(2)}km in ${dtSecForJumpCheck.toFixed(1)}s`
     );
     return { stored: true, suspicious: true, ping };
+  }
+
+  // A backfilled point is history, not a live position - broadcasting it would jerk the admin
+  // map to where the salesperson was earlier and re-light them as online.
+  if (!isLivePoint) {
+    return { stored: true, ping, todayDistanceKm: sp.todayDistanceKm };
   }
 
   try {

@@ -143,7 +143,11 @@ async function main() {
     const territory = territories[sp._territoryIdx];
     const lat = CITY_CENTER.lat + rand(-0.08, 0.08);
     const lng = CITY_CENTER.lng + rand(-0.08, 0.08);
-    const name = `${customerNamePrefixes[i]} ${pick(customerSuffixes)}`;
+    // Index must wrap: this loop runs more times than there are prefixes (32 vs 30), and a
+    // bare `customerNamePrefixes[i]` silently produced customers literally named
+    // "undefined Traders" / "undefined Retail" (plus matching @example.com emails) for the
+    // last two iterations.
+    const name = `${customerNamePrefixes[i % customerNamePrefixes.length]} ${pick(customerSuffixes)}`;
     const customer = await prisma.customer.create({
       data: {
         name,

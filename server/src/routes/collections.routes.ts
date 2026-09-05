@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { resolveOwningSalespersonId } from "../lib/owningSalesperson";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
 import { notifyAdmins } from "../services/notifications";
@@ -45,7 +46,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const data = createSchema.parse(req.body);
-    const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+    const salespersonId = await resolveOwningSalespersonId(req.auth!, req.body.salespersonId);
 
     const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId } });
     if (!customer) return res.status(400).json({ error: "Customer not found" });

@@ -37,16 +37,25 @@ interface FieldWorkState {
 
 let initialized = false;
 
-function sendPing(payload: LocationPing) {
+/**
+ * "sent"  - the backend took the point.
+ * "retry" - transient failure (offline, server blip); queue it and try again later.
+ * "stop"  - the backend has no field-work session for this salesperson any more (HTTP 409),
+ *           so there is nothing to retry into. Queuing these would grow the offline queue
+ *           forever with points the server will keep refusing; the watcher has to stop instead.
+ */
+type PingOutcome = "sent" | "retry" | "stop";
+
+function sendPing(payload: LocationPing): Promise<PingOutcome> {
   const socket = getSocket();
   if (isSocketConnected() && socket) {
     socket.emit("location:update", payload);
-    return Promise.resolve(true);
+    return Promise.resolve("sent");
   }
   return api
     .post("/tracking/ping", payload)
-    .then(() => true)
-    .catch(() => false);
+    .then((): PingOutcome => "sent")
+    .catch((err): PingOutcome => (err?.response?.status === 409 ? "stop" : "retry"));
 }
 
 export const useFieldWorkStore = create<FieldWorkState>()((set, get) => ({
@@ -129,8 +138,8 @@ export const useFieldWorkStore = create<FieldWorkState>()((set, get) => ({
             accuracy: p.accuracy,
             heading: p.heading,
             recordedAt: p.recordedAt,
-          }).then((ok) => {
-            if (!ok) {
+          }).then((outcome) => {
+            if (outcome === "retry") {
               queuePing({
                 lat: p.lat,
                 lng: p.lng,
@@ -139,6 +148,14 @@ export const useFieldWorkStore = create<FieldWorkState>()((set, get) => ({
                 heading: p.heading,
                 recordedAt: p.recordedAt,
               }).then(() => queuedPingCount().then((n) => set({ pendingCount: n })));
+            } else if (outcome === "stop") {
+              // The shift is already over as far as the backend is concerned (ended on another
+              // device, or an "end" this tab never saw). Tear the watcher down and reconcile
+              // the UI to the backend's truth rather than tracking on into the void.
+              const { watchId: currentWatchId } = get();
+              if (currentWatchId >= 0) clearPositionWatch(currentWatchId);
+              set({ tracking: false, status: "INACTIVE", fieldWorkStartAt: null, watchId: -1 });
+              toast.info("Field work is no longer active. Location tracking stopped.");
             }
           });
         },
@@ -246,8 +263,17 @@ export const useFieldWorkStore = create<FieldWorkState>()((set, get) => ({
           recordedAt: p.recordedAt,
         });
         if (p.id != null) await removeQueuedPing(p.id);
-      } catch {
-        // stop on first failure — preserve chronological order for the next attempt
+      } catch (err) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        // A 4xx (other than rate-limiting) is a permanent refusal - the point belongs to no
+        // field-work session, or is invalid. Retrying it forever would wedge the queue and
+        // block every later point behind it, so drop it and carry on.
+        if (status && status >= 400 && status < 500 && status !== 429) {
+          if (p.id != null) await removeQueuedPing(p.id);
+          continue;
+        }
+        // Anything else is transient (offline, server blip): stop here and preserve
+        // chronological order for the next attempt.
         break;
       }
     }

@@ -41,17 +41,33 @@ const followUpSchema = z.object({
   customerId: z.string().optional(),
   dueDate: z.string(),
   notes: z.string().optional(),
+  salespersonId: z.string().min(1).optional(),
 });
 
 router.post(
   "/",
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
-    const data = followUpSchema.parse(req.body);
-    const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+    const { salespersonId: requestedSalespersonId, ...data } = followUpSchema.parse(req.body);
+    // Must be resolved and present before the ownership lookup: `findFirst({ where: { id:
+    // undefined } })` is not "no match" in Prisma, it's "no filter", so an omitted id used to
+    // match an unrelated salesperson and pass the check.
+    const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : requestedSalespersonId;
+    if (!salespersonId) return res.status(400).json({ error: "Select a salesperson for this follow-up" });
     if (req.auth!.role === "ADMIN") {
       const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
       if (!owner) return res.status(400).json({ error: "Salesperson not found" });
+    }
+    // The lead/customer a follow-up points at arrives from the request body, so each must be
+    // confirmed to belong to this tenant - otherwise a follow-up can be created against
+    // another tenant's record simply by supplying its id.
+    if (data.customerId) {
+      const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId }, select: { id: true } });
+      if (!customer) return res.status(400).json({ error: "Customer not found" });
+    }
+    if (data.leadId) {
+      const lead = await prisma.lead.findFirst({ where: { id: data.leadId, tenantId }, select: { id: true } });
+      if (!lead) return res.status(400).json({ error: "Lead not found" });
     }
     const followUp = await prisma.followUp.create({
       data: { ...data, tenantId, dueDate: new Date(data.dueDate), salespersonId },
