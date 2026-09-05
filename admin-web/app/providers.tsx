@@ -9,6 +9,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const checkSession = useAuthStore((s) => s.checkSession);
 
   useEffect(() => {
+    // Never on /super-admin/* - that section uses a completely separate platform-admin auth
+    // system (see store/platformAuth.ts) with its own cookie, and a 401 from this tenant check
+    // has nothing to do with whether a platform admin is signed in.
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/super-admin")) return;
     // The only reliable "am I logged in" signal now that auth is an httpOnly cookie -
     // see store/auth.ts. Runs once per app load; the dashboard layout blocks on
     // `status` until this resolves.

@@ -24,7 +24,11 @@ api.interceptors.response.use(
       } catch {
         // ignore (private mode / storage disabled)
       }
-      if (!PUBLIC_PATHS.includes(window.location.pathname)) {
+      // /super-admin/* is a different auth system entirely (platform admin, see
+      // lib/platformApi.ts) - a 401 on this tenant client there must never redirect to the
+      // tenant /login, which would bounce a platform admin out of their own section.
+      const isPlatformSection = window.location.pathname.startsWith("/super-admin");
+      if (!isPlatformSection && !PUBLIC_PATHS.includes(window.location.pathname)) {
         window.location.href = "/login";
       }
     }

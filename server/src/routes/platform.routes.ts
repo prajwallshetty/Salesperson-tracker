@@ -213,7 +213,10 @@ router.patch(
 router.get(
   "/plans",
   asyncHandler(async (_req, res) => {
-    const plans = await prisma.subscriptionPlan.findMany({ where: { isActive: true }, orderBy: { monthlyPrice: "asc" } });
+    // Platform-admin management view - unlike /api/public/plans (tenant/landing-page-facing,
+    // active plans only), this includes inactive plans too so one can be reactivated or a
+    // freshly-created plan reviewed before activating it.
+    const plans = await prisma.subscriptionPlan.findMany({ orderBy: { monthlyPrice: "asc" } });
     res.json(plans);
   })
 );

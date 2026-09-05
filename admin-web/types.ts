@@ -476,3 +476,127 @@ export interface TenantSubscription {
   plan: PublicPlan;
   usage: { salespersons: number };
 }
+
+// ─── Super Admin (platform) ──────────────────────────────────────────────
+
+export type TenantStatus = "ACTIVE" | "SUSPENDED";
+
+export interface PlatformTenantListItem {
+  id: string;
+  name: string;
+  slug: string;
+  status: TenantStatus;
+  createdAt: string;
+  userCount: number;
+  salespersonCount: number;
+  subscription: { status: SubscriptionStatus; planName: string; planKey: string; currentPeriodEnd: string | null } | null;
+}
+
+export interface PlatformTenantDetail {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  status: TenantStatus;
+  createdAt: string;
+  updatedAt: string;
+  subscription:
+    | (TenantSubscription & { id: string; providerSubscriptionId: string | null; billingProvider: string | null; trialStart: string | null; plan: PublicPlan & { id: string; description: string | null; trialDays: number } })
+    | null;
+  userCount: number;
+  salespersonCount: number;
+  customerCount: number;
+  razorpayCustomerId: string | null;
+  lastPaymentEvent: { action: string; at: string } | null;
+}
+
+export interface PlatformBillingAuditLogItem {
+  id: string;
+  tenantId: string | null;
+  actorType: "PLATFORM_ADMIN" | "TENANT_ADMIN" | "SYSTEM";
+  actorId: string | null;
+  action: string;
+  previousState: unknown;
+  newState: unknown;
+  providerEventId: string | null;
+  createdAt: string;
+}
+
+export interface PlatformDashboardStats {
+  tenants: { total: number; active: number; suspended: number; newLast30d: number };
+  subscriptions: { trialing: number; active: number; pastDue: number; cancelled: number; expired: number; suspended: number };
+  salespersons: { total: number };
+  revenue: { mrr: number; arr: number; currency: string; note: string };
+  failedPaymentsLast30d: number;
+}
+
+export interface PlatformSubscriptionListItem {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  tenantStatus: TenantStatus;
+  planKey: string;
+  planName: string;
+  status: SubscriptionStatus;
+  billingInterval: BillingInterval;
+  trialEnd: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  providerSubscriptionId: string | null;
+  salespersonCount: number;
+  maxSalespersons: number;
+  createdAt: string;
+}
+
+export interface PlatformPaymentItem {
+  billingEventId: string;
+  eventType: string;
+  razorpayPaymentId: string;
+  razorpaySubscriptionId: string | null;
+  amount: number | null;
+  currency: string;
+  status: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  createdAt: string;
+}
+
+export interface PlatformBillingEventItem {
+  id: string;
+  provider: string;
+  eventId: string;
+  eventType: string;
+  processed: boolean;
+  processedAt: string | null;
+  createdAt: string;
+  tenantId: string | null;
+}
+
+export interface PlatformAnalytics {
+  revenue: { mrr: number; arr: number; currency: string };
+  revenueByMonth: { month: string; amount: number }[];
+  revenueByMonthNote: string;
+  tenantGrowthByMonth: { month: string; count: number }[];
+  subscriptionsByPlan: { planKey: string; planName: string; count: number }[];
+  subscriptionsByStatus: { status: SubscriptionStatus; count: number }[];
+  newTenantsLast30d: number;
+  cancellationsLast30d: number;
+}
+
+export interface PlatformPlan {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  monthlyPrice: number;
+  annualPrice: number | null;
+  maxSalespersons: number;
+  maxAdmins: number;
+  features: PlanFeatures;
+  trialDays: number;
+  isActive: boolean;
+  razorpayMonthlyPlanId: string | null;
+  razorpayYearlyPlanId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
