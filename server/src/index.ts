@@ -27,6 +27,7 @@ import targetsRoutes from "./routes/targets.routes";
 import attendanceRoutes from "./routes/attendance.routes";
 import usersRoutes from "./routes/users.routes";
 import platformRoutes from "./routes/platform.routes";
+import platformOpsRoutes from "./routes/platformOps.routes";
 import publicRoutes from "./routes/public.routes";
 import billingRoutes from "./routes/billing.routes";
 import razorpayWebhookRoutes from "./routes/razorpayWebhook.routes";
@@ -113,6 +114,7 @@ app.use("/api/targets", targetsRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/platform", platformRoutes);
+app.use("/api/platform", platformOpsRoutes);
 app.use("/api/billing", billingRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

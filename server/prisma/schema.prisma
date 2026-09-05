@@ -140,6 +140,7 @@ model Tenant {
   subscription Subscription?
 
   @@index([status])
+  @@index([createdAt])
 }
 
 // Platform-level SalesGrid staff (not a tenant user, not a `Role`) who administers tenants,
@@ -213,6 +214,8 @@ model Subscription {
 
   @@index([planId])
   @@index([status])
+  @@index([providerSubscriptionId])
+  @@index([providerCustomerId])
 }
 
 // One Razorpay customer per tenant, reused across subscription changes/renewals so a tenant
@@ -249,14 +252,16 @@ model BillingEvent {
 
   @@index([eventType])
   @@index([processed])
+  @@index([createdAt])
 }
 
-// Append-only record of billing-affecting actions, for support/dispute investigation - who
-// (platform admin, tenant admin, or the system reacting to a webhook) did what, and the
-// before/after state. Never updated or deleted.
+// Append-only record of billing- and platform-affecting actions, for support/dispute
+// investigation - who (platform admin, tenant admin, or the system reacting to a webhook) did
+// what, and the before/after state. Never updated or deleted. `tenantId` is null for actions with
+// no single owning tenant (e.g. PLAN_CREATED/PLAN_UPDATED, which affect the global plan catalog).
 model BillingAuditLog {
   id              String         @id @default(cuid())
-  tenantId        String
+  tenantId        String?
   actorType       AuditActorType
   actorId         String?
   action          String

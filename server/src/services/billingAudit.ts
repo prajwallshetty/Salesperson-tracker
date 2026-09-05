@@ -8,7 +8,8 @@ import { AuditActorType, Prisma } from "@prisma/client";
  * same request, not just services/razorpayWebhook.ts.
  */
 export async function recordBillingAudit(input: {
-  tenantId: string;
+  /** Omit for a platform-wide action with no single owning tenant (e.g. PLAN_CREATED). */
+  tenantId?: string | null;
   actorType: AuditActorType;
   actorId?: string | null;
   action: string;
@@ -18,7 +19,7 @@ export async function recordBillingAudit(input: {
 }) {
   await prisma.billingAuditLog.create({
     data: {
-      tenantId: input.tenantId,
+      tenantId: input.tenantId ?? null,
       actorType: input.actorType,
       actorId: input.actorId ?? null,
       action: input.action,

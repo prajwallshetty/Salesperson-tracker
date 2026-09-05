@@ -196,6 +196,16 @@ router.patch(
     const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id } });
     if (!tenant) return res.status(404).json({ error: "Not found" });
     const updated = await prisma.tenant.update({ where: { id: req.params.id }, data: { status } });
+    if (tenant.status !== status) {
+      await recordBillingAudit({
+        tenantId: tenant.id,
+        actorType: "PLATFORM_ADMIN",
+        actorId: req.platformAuth!.platformAdminId,
+        action: status === "SUSPENDED" ? "TENANT_SUSPENDED" : "TENANT_ACTIVATED",
+        previousState: { status: tenant.status },
+        newState: { status },
+      });
+    }
     res.json(updated);
   })
 );

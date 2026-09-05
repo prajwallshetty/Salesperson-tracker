@@ -89,8 +89,6 @@ const signupSchema = z.object({
   password: z.string().min(6),
 });
 
-const TRIAL_DAYS = 14;
-
 // New-company onboarding: creates a Tenant, its first ADMIN user (the workspace owner), and a
 // starter-plan trial subscription in one step, then signs the owner straight in (same cookie
 // mechanism as /login). This is the only place a Tenant row is created outside the multi-tenancy
@@ -115,7 +113,10 @@ router.post(
     const slug = await generateUniqueTenantSlug(data.companyName);
     const passwordHash = await hashPassword(data.password);
     const now = new Date();
-    const trialEnd = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    // The plan's own configurable trialDays (defaults to 14, editable by a platform admin via
+    // PATCH /platform/plans/:id) - not a hardcoded constant here, so changing it takes effect
+    // for new signups immediately without a code change.
+    const trialEnd = new Date(now.getTime() + starterPlan.trialDays * 24 * 60 * 60 * 1000);
 
     const { user, tenant } = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({ data: { name: data.companyName, slug, status: "ACTIVE" } });
@@ -130,7 +131,12 @@ router.post(
           billingProvider: "manual",
           currentPeriodStart: now,
           currentPeriodEnd: trialEnd,
+          trialStart: now,
+          trialEnd,
         },
+      });
+      await tx.billingAuditLog.create({
+        data: { tenantId: tenant.id, actorType: "SYSTEM", action: "TENANT_CREATED", newState: { companyName: data.companyName, planKey: starterPlan.key } },
       });
       return { user, tenant };
     });
