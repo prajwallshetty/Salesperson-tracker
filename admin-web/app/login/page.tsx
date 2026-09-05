@@ -10,7 +10,7 @@ import { apiErrorMessage } from "@/lib/api";
 export default function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const router = useRouter();
-  const [email, setEmail] = useState("admin@salesforcepro.com");
+  const [email, setEmail] = useState("admin@salesgrid.live");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,12 +33,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-900 via-brand-700 to-brand-500 px-4">
       <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-white">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-xl font-bold backdrop-blur">
-            SF
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">SalesForce Pro</h1>
-          <p className="mt-1 text-sm text-white/70">Admin Dashboard</p>
+        <div className="mb-8 flex flex-col items-center">
+          <img src="/logo.png" alt="SalesGrid" className="h-16 sm:h-20 w-auto object-contain filter drop-shadow-md" />
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-2xl">

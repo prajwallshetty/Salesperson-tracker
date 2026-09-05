@@ -1,4 +1,4 @@
-# SalesForce Pro — Sales Force Management System
+# SalesGrid — Sales Force Management System
 
 A full-stack Sales Force Management System with a real-time Admin Web Dashboard
 and a mobile-first Salesperson Field App (PWA), built on a shared Node/Express +

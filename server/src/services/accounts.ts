@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { prisma } from "../lib/prisma";
 import { hashPassword } from "../lib/auth";
 import { SAFE_USER_SELECT } from "../lib/selects";
@@ -7,7 +8,7 @@ import { assertCanAddSalesperson } from "../lib/entitlements";
 export interface CreateSalespersonAccountInput {
   name: string;
   email: string;
-  password: string;
+  password?: string;
   phone?: string;
   employeeCode: string;
   territoryId?: string | null;
@@ -31,7 +32,8 @@ export async function createSalespersonAccount(tenantId: string, input: CreateSa
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw Object.assign(new Error("Email already in use"), { status: 409 });
 
-  const passwordHash = await hashPassword(input.password);
+  const passwordToHash = input.password || crypto.randomBytes(16).toString("hex");
+  const passwordHash = await hashPassword(passwordToHash);
   const user = await prisma.user.create({
     data: {
       tenantId,
@@ -59,3 +61,4 @@ export async function createSalespersonAccount(tenantId: string, input: CreateSa
   // endpoint - see the explicit `select` on every other query that returns a Salesperson.
   return salesperson;
 }
+
