@@ -5,6 +5,7 @@ import { comparePassword, hashPassword, signToken } from "../lib/auth";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, AUTH_COOKIE_NAME } from "../middleware/auth";
 import { generateUniqueTenantSlug } from "../lib/slug";
+import { authRateLimit, signupRateLimit } from "../middleware/rateLimit";
 
 const router = Router();
 
@@ -43,6 +44,7 @@ function cookieOptions() {
 
 router.post(
   "/login",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const { email, password } = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({
@@ -95,6 +97,7 @@ const TRIAL_DAYS = 14;
 // backfill migration - every other endpoint only ever operates within an existing tenantId.
 router.post(
   "/signup",
+  signupRateLimit,
   asyncHandler(async (req, res) => {
     const data = signupSchema.parse(req.body);
     const email = data.email.toLowerCase();
@@ -156,6 +159,7 @@ const accessCodeLoginSchema = z.object({
 
 router.post(
   "/access-code-login",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const { accessCode } = accessCodeLoginSchema.parse(req.body);
     // Codes are generated upper-case (see lib/accessCode.ts); normalize input the same

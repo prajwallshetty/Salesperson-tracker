@@ -59,6 +59,13 @@ if (isProduction && allowedOrigins.length === 0) {
 }
 const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : isProduction ? [] : ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"];
 
+// Trust exactly one hop (the platform's own reverse proxy/load balancer) in production, so
+// req.ip / X-Forwarded-For based logic - the rate limiters below - keys on the real client IP
+// instead of the proxy's. Never `true` (trust every hop): that lets a client spoof its own
+// X-Forwarded-For and bypass IP-based rate limiting entirely. Left unset in development, where
+// there's no proxy in front of the dev server.
+if (isProduction) app.set("trust proxy", 1);
+
 const io = new Server(server, {
   cors: { origin: corsOrigin, credentials: true },
 });

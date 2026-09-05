@@ -11,6 +11,7 @@ import {
 } from "../services/razorpayBilling";
 import { recordBillingAudit } from "../services/billingAudit";
 import { RazorpayNotConfiguredError } from "../lib/razorpay";
+import { billingRateLimit } from "../middleware/rateLimit";
 
 // The Razorpay webhook itself lives in razorpayWebhook.routes.ts, mounted in index.ts BEFORE
 // the global express.json() parser - see that file's top comment for why it can't live on this
@@ -69,6 +70,7 @@ const checkoutSchema = z.object({
 router.post(
   "/checkout",
   requireRole("ADMIN"),
+  billingRateLimit,
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const { planKey, interval } = checkoutSchema.parse(req.body);
@@ -107,6 +109,7 @@ const cancelSchema = z.object({
 router.post(
   "/cancel",
   requireRole("ADMIN"),
+  billingRateLimit,
   asyncHandler(async (req, res) => {
     const { immediately } = cancelSchema.parse(req.body);
     try {

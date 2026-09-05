@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { comparePassword, hashPassword, signPlatformToken } from "../lib/auth";
 import { requirePlatformAuth, PLATFORM_AUTH_COOKIE_NAME } from "../middleware/platformAuth";
 import { recordBillingAudit } from "../services/billingAudit";
+import { authRateLimit } from "../middleware/rateLimit";
 
 const router = Router();
 
@@ -23,6 +24,7 @@ function platformCookieOptions() {
 
 router.post(
   "/login",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const { email, password } = z.object({ email: z.string().email(), password: z.string().min(1) }).parse(req.body);
     const admin = await prisma.platformAdmin.findUnique({ where: { email: email.toLowerCase() } });
