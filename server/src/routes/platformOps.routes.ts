@@ -295,6 +295,7 @@ const planCreateSchema = z.object({
   trialDays: z.number().int().min(0).optional(),
   features: z.record(z.boolean()).optional(),
   isActive: z.boolean().optional(),
+  displayOrder: z.number().int().optional(),
 });
 
 router.post(
@@ -325,6 +326,7 @@ const planUpdateSchema = z.object({
   trialDays: z.number().int().min(0).optional(),
   features: z.record(z.boolean()).optional(),
   isActive: z.boolean().optional(),
+  displayOrder: z.number().int().optional(),
   razorpayMonthlyPlanId: z.string().optional().nullable(),
   razorpayYearlyPlanId: z.string().optional().nullable(),
 });

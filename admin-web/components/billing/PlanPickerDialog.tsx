@@ -24,6 +24,10 @@ interface PlanPickerDialogProps {
   /** Called once the payment popup reports success. The parent should re-fetch /billing/subscription -
    * this is a hint to refresh, never proof the subscription is actually active (only the webhook decides that). */
   onCheckoutSubmitted: () => void;
+  /** Pre-selects the billing interval toggle and outlines one card - e.g. arriving here right
+   * after signup with a plan chosen on the pricing page. Purely a UI hint; never trusted as price. */
+  initialInterval?: BillingInterval;
+  highlightPlanKey?: string;
 }
 
 export function PlanPickerDialog({
@@ -34,14 +38,16 @@ export function PlanPickerDialog({
   currentSalespersonCount,
   admin,
   onCheckoutSubmitted,
+  initialInterval,
+  highlightPlanKey,
 }: PlanPickerDialogProps) {
   const [plans, setPlans] = useState<PublicPlan[] | null>(null);
-  const [interval, setInterval] = useState<BillingInterval>(currentInterval);
+  const [interval, setInterval] = useState<BillingInterval>(initialInterval ?? currentInterval);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setInterval(currentInterval);
+    setInterval(initialInterval ?? currentInterval);
     api
       .get("/public/plans")
       .then((res) => setPlans(res.data))
@@ -130,16 +136,27 @@ export function PlanPickerDialog({
               const price = isEnterprise ? null : interval === "YEARLY" && plan.annualPrice != null ? plan.annualPrice : plan.monthlyPrice;
               const isDowngrade = plan.maxSalespersons < currentSalespersonCount;
 
+              const isHighlighted = !isCurrent && highlightPlanKey?.toUpperCase() === plan.key;
+
               return (
                 <div
                   key={plan.key}
                   className={cn(
                     "flex flex-col rounded-2xl border p-4",
-                    isCurrent ? "border-primary bg-primary-soft/40" : "border-border/70 bg-card"
+                    isCurrent
+                      ? "border-primary bg-primary-soft/40"
+                      : isHighlighted
+                        ? "border-primary ring-2 ring-primary/30"
+                        : "border-border/70 bg-card"
                   )}
                 >
+                  {isHighlighted && <span className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-primary">Your selection</span>}
                   <p className="text-sm font-bold text-foreground">{plan.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Up to {plan.maxSalespersons.toLocaleString("en-IN")} salespeople</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {/* Enterprise's maxSalespersons is a large internal "effectively unlimited"
+                        sentinel, not the marketed minimum seat count - never render it directly. */}
+                    {isEnterprise ? "100+ salespeople" : `Up to ${plan.maxSalespersons.toLocaleString("en-IN")} salespeople`}
+                  </p>
                   <div className="mt-3 flex items-baseline gap-1">
                     {isEnterprise ? (
                       <span className="text-lg font-extrabold text-foreground">Contact Sales</span>

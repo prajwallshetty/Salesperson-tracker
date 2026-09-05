@@ -18,10 +18,10 @@ import {
   OrdersWorkflowMockup,
   ReportingMockup,
 } from "@/components/mockups/FeatureMockups";
-import { getPublicPlans } from "@/lib/plans";
+import { getPublicPlans, getFeatureCatalog } from "@/lib/plans";
 
 export default async function HomePage() {
-  const plans = await getPublicPlans();
+  const [plans, featureCatalog] = await Promise.all([getPublicPlans(), getFeatureCatalog()]);
 
   return (
     <>
@@ -118,7 +118,7 @@ export default async function HomePage() {
 
         <HowItWorks />
         <FeatureGrid />
-        <Pricing plans={plans} />
+        <Pricing plans={plans} featureCatalog={featureCatalog} />
         <FAQ />
         <FinalCta />
       </main>

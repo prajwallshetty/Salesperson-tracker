@@ -1,11 +1,18 @@
 export interface PublicPlan {
   key: string;
   name: string;
+  description: string | null;
   monthlyPrice: number;
   annualPrice: number | null;
   maxSalespersons: number;
   maxAdmins: number;
   features: Record<string, boolean>;
+  displayOrder: number;
+}
+
+export interface FeatureCatalogEntry {
+  key: string;
+  label: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -23,6 +30,19 @@ export async function getPublicPlans(): Promise<PublicPlan[]> {
   } catch {
     // The landing page must render even if the API is briefly unreachable at build/request
     // time - the Pricing section falls back to a "view live pricing" state rather than crashing.
+    return [];
+  }
+}
+
+// The human label for every structured feature entitlement key, in canonical display order -
+// see server/src/lib/featureEntitlements.ts, the single source of truth this mirrors. Used so
+// the pricing/comparison UI never hard-codes its own copy of what e.g. "GPS_TRACKING" means.
+export async function getFeatureCatalog(): Promise<FeatureCatalogEntry[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/public/feature-catalog`, { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    return (await res.json()) as FeatureCatalogEntry[];
+  } catch {
     return [];
   }
 }

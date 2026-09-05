@@ -9,10 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { platformApi } from "@/lib/platformApi";
-import { apiErrorMessage } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import type { PlatformPlan } from "@/types";
 
-const FEATURE_KEYS = ["gpsTracking", "liveTracking", "routeHistory", "targets", "territories", "reports", "quotations", "orders", "collections"] as const;
+interface FeatureCatalogEntry {
+  key: string;
+  label: string;
+}
 
 interface PlanFormDialogProps {
   open: boolean;
@@ -35,6 +38,18 @@ export function PlanFormDialog({ open, onClose, plan, onSaved }: PlanFormDialogP
     features: {} as Record<string, boolean>,
   });
   const [busy, setBusy] = useState(false);
+  // Fetched from the same catalog the server enforces and the landing page renders
+  // (server/src/lib/featureEntitlements.ts, via GET /api/public/feature-catalog) - never
+  // hardcoded here, so this editor can never drift from what actually gates access.
+  const [catalog, setCatalog] = useState<FeatureCatalogEntry[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    api
+      .get("/public/feature-catalog")
+      .then((res) => setCatalog(res.data))
+      .catch(() => toast.error("Failed to load feature catalog"));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -137,15 +152,15 @@ export function PlanFormDialog({ open, onClose, plan, onSaved }: PlanFormDialogP
           </div>
 
           <div className="sm:col-span-2">
-            <Label className="mb-2 block">Features</Label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {FEATURE_KEYS.map((key) => (
+            <Label className="mb-2 block">Feature entitlements</Label>
+            <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+              {catalog.map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2 text-sm">
                   <Checkbox
                     checked={!!form.features[key]}
                     onCheckedChange={(c) => setForm((f) => ({ ...f, features: { ...f.features, [key]: c === true } }))}
                   />
-                  {key}
+                  {label}
                 </label>
               ))}
             </div>

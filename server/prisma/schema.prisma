@@ -184,6 +184,9 @@ model SubscriptionPlan {
   features              Json     @default("{}")
   trialDays             Int      @default(14)
   isActive              Boolean  @default(true)
+  // Explicit display/sort order for pricing pages and plan tables - independent of monthlyPrice
+  // so Enterprise (priced "Contact Sales", stored as 0) doesn't sort before Starter.
+  displayOrder          Int      @default(0)
   // Razorpay Plan ids this Sales Grid plan maps to (one per billing interval) - created/managed
   // out of band via scripts/setup-razorpay-plans.ts, never created dynamically at checkout time.
   // Null until that setup script has been run against a real Razorpay account, so a plan can
