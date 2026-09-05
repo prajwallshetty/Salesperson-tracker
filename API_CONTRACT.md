@@ -45,13 +45,52 @@ call any tenant-scoped endpoint.
 - `PATCH /api/platform/tenants/:id/status` `{ status: "ACTIVE"|"SUSPENDED" }` (platform auth)
 - `GET /api/platform/plans` (platform auth) → the plan catalog
 - `PATCH /api/platform/tenants/:id/subscription` `{ planKey?, status?, currentPeriodEnd? }`
-  (platform auth) - manual billing path; a real payment provider (Razorpay/Stripe) would call the
-  same update from a verified webhook instead of this endpoint (see `services/billing.ts` for
-  where that integration belongs).
+  (platform auth) - manual support override (comping an account, fixing a stuck subscription).
+  Does not touch Razorpay itself; every real checkout/renewal/cancellation instead flows through
+  the webhook in `services/razorpayWebhook.ts`, which updates the same `Subscription` row. Using
+  this on a tenant with a live `providerSubscriptionId` can desync local state from Razorpay's.
+- `GET /api/platform/tenants/:id` (platform auth) also returns `razorpayCustomerId` and
+  `lastPaymentEvent` (the most recent `WEBHOOK_PAYMENT_*` audit action, if any) alongside the
+  tenant's subscription/plan - never a Razorpay secret, only identifiers already safe to show a
+  support admin.
+- `GET /api/platform/tenants/:id/billing-audit-log?page=&pageSize=` (platform auth) → paginated
+  `BillingAuditLog` rows for that tenant (plan/status changes, webhook-driven transitions, who/what
+  triggered each one) - the audit trail for "why did this tenant's billing state change".
 
 There is no bootstrap endpoint for the first PlatformAdmin - run
 `npx tsx scripts/bootstrap-platform-admin.ts <email> [name]` once from the server, which prints a
 generated password to the console (shown once, not stored in plaintext anywhere).
+
+## Billing (Razorpay)
+
+A tenant's subscription is billed through Razorpay's official Subscriptions API - never a
+frontend payment simulation. `RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET` never leave the
+server; only `RAZORPAY_KEY_ID` (public) reaches the browser, returned from `POST
+/api/billing/checkout` for use with Razorpay's own Checkout.js.
+
+- `GET /api/billing/subscription` (tenant auth, any role) → status, billing interval, trial/renewal
+  dates, cancellation state, plan (with limits/features), and current salesperson usage. The one
+  place both admin-web and any future client should read a tenant's billing state from.
+- `POST /api/billing/checkout` `{ planKey, interval: "MONTHLY"|"YEARLY" }` (tenant auth, ADMIN) →
+  `{ razorpaySubscriptionId, razorpayKeyId }` to open Razorpay Checkout with. Does **not** mark the
+  subscription active/paid - that only happens once the webhook below verifies payment. `409` if
+  the plan has no Razorpay plan id configured yet (see `scripts/setup-razorpay-plans.ts`), `503` if
+  Razorpay isn't configured in this environment.
+- `POST /api/billing/cancel` `{ immediately?: boolean }` (tenant auth, ADMIN) - cancels at Razorpay
+  (end of period by default), marks `cancelAtPeriodEnd`/`cancelledAt` locally; the subsequent
+  `subscription.cancelled` webhook is what actually flips `status` to `CANCELLED`.
+- `POST /api/billing/razorpay/webhook` (Razorpay only, HMAC-signed via `x-razorpay-signature`,
+  mounted before the global JSON body parser so the raw bytes Razorpay signed are verified as-is) -
+  idempotent on `billing_events.event_id`; maps Razorpay's raw status into the app's own
+  `TRIALING`/`ACTIVE`/`PAST_DUE`/`CANCELLED`/`EXPIRED`/`SUSPENDED` via
+  `lib/subscriptionStatusMap.ts` and writes a `BillingAuditLog` row for every applied change.
+
+Plan/feature limits are enforced server-side via `lib/entitlements.ts`'s
+`requireActiveSubscription()`/`requireFeature()`/`requirePlanLimit()` middleware on the routes that
+represent paid functionality - never only by hiding a button in the frontend. A tenant whose
+subscription isn't in a usable state gets a specific `402`/`403` message (e.g. "Your trial has
+expired. Choose a plan to continue."), never a generic error, and always keeps access to
+`/api/billing/*` itself and its own data.
 
 ## Auth transport — httpOnly cookie (read this before wiring up either frontend)
 
