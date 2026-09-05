@@ -10,6 +10,7 @@ import {
   PlanNotConfiguredForRazorpayError,
 } from "../services/razorpayBilling";
 import { recordBillingAudit } from "../services/billingAudit";
+import { RazorpayNotConfiguredError } from "../lib/razorpay";
 
 // The Razorpay webhook itself lives in razorpayWebhook.routes.ts, mounted in index.ts BEFORE
 // the global express.json() parser - see that file's top comment for why it can't live on this
@@ -18,6 +19,18 @@ import { recordBillingAudit } from "../services/billingAudit";
 const router = Router();
 
 router.use(requireAuth);
+
+/** Maps the Razorpay-specific error types both /checkout and /cancel can throw to an HTTP response. */
+function handleBillingError(err: unknown, res: import("express").Response) {
+  if (err instanceof PlanNotConfiguredForRazorpayError) {
+    return res.status(err.status).json({ error: err.message });
+  }
+  if (err instanceof RazorpayNotConfiguredError) {
+    console.error(err);
+    return res.status(err.status).json({ error: "Payments are temporarily unavailable. Please try again shortly or contact support." });
+  }
+  return null;
+}
 
 router.get(
   "/subscription",
@@ -81,9 +94,7 @@ router.post(
       });
       res.json(checkout);
     } catch (err) {
-      if (err instanceof PlanNotConfiguredForRazorpayError) {
-        return res.status(err.status).json({ error: err.message });
-      }
+      if (handleBillingError(err, res)) return;
       throw err;
     }
   })
@@ -98,8 +109,13 @@ router.post(
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
     const { immediately } = cancelSchema.parse(req.body);
-    const subscription = await cancelRazorpaySubscription(req.auth!.tenantId, immediately, req.auth!.userId);
-    res.json(subscription);
+    try {
+      const subscription = await cancelRazorpaySubscription(req.auth!.tenantId, immediately, req.auth!.userId);
+      res.json(subscription);
+    } catch (err) {
+      if (handleBillingError(err, res)) return;
+      throw err;
+    }
   })
 );
 

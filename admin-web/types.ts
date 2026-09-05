@@ -439,3 +439,40 @@ export interface Notification {
   isRead: boolean;
   createdAt: string;
 }
+
+export type SubscriptionStatus = "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELLED" | "EXPIRED" | "SUSPENDED";
+export type BillingInterval = "MONTHLY" | "YEARLY";
+
+export interface PlanFeatures {
+  gpsTracking?: boolean;
+  liveTracking?: boolean;
+  routeHistory?: boolean;
+  targets?: boolean;
+  territories?: boolean;
+  reports?: boolean;
+  quotations?: boolean;
+  orders?: boolean;
+  collections?: boolean;
+}
+
+export interface PublicPlan {
+  key: string;
+  name: string;
+  monthlyPrice: number;
+  annualPrice: number | null;
+  maxSalespersons: number;
+  maxAdmins: number;
+  features: PlanFeatures;
+}
+
+export interface TenantSubscription {
+  status: SubscriptionStatus;
+  billingInterval: BillingInterval;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  trialEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  cancelledAt: string | null;
+  plan: PublicPlan;
+  usage: { salespersons: number };
+}

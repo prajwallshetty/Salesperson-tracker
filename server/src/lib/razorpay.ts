@@ -9,6 +9,7 @@ import crypto from "crypto";
  * separate live keys in production - never mix the two, never commit either to git).
  */
 export class RazorpayNotConfiguredError extends Error {
+  status = 503;
   constructor() {
     super("Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.");
     this.name = "RazorpayNotConfiguredError";

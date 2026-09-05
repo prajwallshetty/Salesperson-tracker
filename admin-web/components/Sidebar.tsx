@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Bell,
   Building2,
+  CreditCard,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
@@ -88,6 +89,7 @@ const GROUPS: NavGroup[] = [
       { label: "Users & Roles", href: "/users", icon: ShieldCheck, adminOnly: true },
       { label: "Notifications", href: "/notifications", icon: Bell },
       { label: "Company Settings", href: "/settings", icon: Building2 },
+      { label: "Billing & Subscription", href: "/billing", icon: CreditCard, adminOnly: true },
     ],
   },
 ];
