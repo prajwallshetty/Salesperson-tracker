@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { requireActiveSubscription, requireFeature } from "../lib/entitlements";
 import { createSalespersonAccount } from "../services/accounts";
 import { SAFE_USER_SELECT } from "../lib/selects";
 import { generateUniqueAccessCode } from "../lib/accessCode";
@@ -238,6 +239,8 @@ router.post(
 router.post(
   "/:id/targets",
   requireRole("ADMIN"),
+  requireActiveSubscription(),
+  requireFeature("targets"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     const { period, periodStart, periodEnd, targetAmount } = z
@@ -266,6 +269,8 @@ router.post(
 
 router.get(
   "/:id/targets",
+  requireActiveSubscription(),
+  requireFeature("targets"),
   asyncHandler(async (req, res) => {
     const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
