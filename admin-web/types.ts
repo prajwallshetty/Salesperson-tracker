@@ -416,7 +416,14 @@ export interface UserAccount {
   avatarUrl: string | null;
   isActive: boolean;
   createdAt: string;
-  salesperson: { id: string; employeeCode: string; status: string; territory: Territory | null } | null;
+  salesperson: {
+    id: string;
+    employeeCode: string;
+    status: string;
+    accessCodeEnabled?: boolean;
+    accessCodeLastUsedAt?: string | null;
+    territory: Territory | null;
+  } | null;
 }
 
 export interface TerritoryPerformanceRow {

@@ -80,10 +80,11 @@ export const useAuthStore = create<AuthState>()((set) => ({
       set({ user, sessionStatus: "authenticated", loginStatus: "idle", error: null });
       connectSocket();
       return user;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Invalid access code";
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.error || (err instanceof Error ? err.message : "Invalid access code");
       set({ loginStatus: "error", error: message });
-      throw err;
+      throw new Error(message);
     }
   },
 

@@ -174,13 +174,25 @@ router.get(
   "/:id/access-code",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
-    const sp = await prisma.salesperson.findFirst({
+    let sp = await prisma.salesperson.findFirst({
       where: { id: req.params.id, tenantId: req.auth!.tenantId },
-      select: { accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
+      select: { id: true, accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
     });
     if (!sp) return res.status(404).json({ error: "Not found" });
+    if (!sp.accessCode) {
+      const code = await generateUniqueAccessCode();
+      sp = await prisma.salesperson.update({
+        where: { id: req.params.id },
+        data: { accessCode: code, accessCodeEnabled: true },
+        select: { id: true, accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
+      });
+    }
     res.locals.allowAccessCode = true;
-    res.json(sp);
+    res.json({
+      accessCode: sp.accessCode,
+      accessCodeEnabled: sp.accessCodeEnabled,
+      accessCodeLastUsedAt: sp.accessCodeLastUsedAt,
+    });
   })
 );
 

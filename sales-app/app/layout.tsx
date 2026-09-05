@@ -10,15 +10,16 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SalesForce Pro — Field App",
+  title: "SalesGrid — Field App",
   description: "Field salesperson app for visits, orders and live GPS tracking",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
+      { url: "/logo.png", type: "image/png" },
       { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
     ],
-    apple: "/icon-192.png",
+    apple: "/logo.png",
   },
 };
 
