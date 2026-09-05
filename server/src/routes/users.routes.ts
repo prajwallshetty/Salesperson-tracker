@@ -13,8 +13,9 @@ router.use(requireAuth, requireRole("ADMIN"));
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { role, isActive, search, page = "1", pageSize = "20" } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (role) where.role = role;
     if (isActive !== undefined) where.isActive = isActive === "true";
     if (search) {
@@ -53,8 +54,8 @@ router.get(
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const user = await prisma.user.findUnique({
-      where: { id: req.params.id },
+    const user = await prisma.user.findFirst({
+      where: { id: req.params.id, tenantId: req.auth!.tenantId },
       select: {
         id: true,
         name: true,
@@ -89,13 +90,14 @@ const createUserSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = createUserSchema.parse(req.body);
 
     if (data.role === "SALESPERSON") {
       if (!data.employeeCode) {
         return res.status(400).json({ error: "employeeCode is required when role is SALESPERSON" });
       }
-      const salesperson = await createSalespersonAccount({
+      const salesperson = await createSalespersonAccount(tenantId, {
         name: data.name,
         email: data.email,
         password: data.password,
@@ -112,7 +114,7 @@ router.post(
     if (existing) return res.status(409).json({ error: "Email already in use" });
     const passwordHash = await hashPassword(data.password);
     const user = await prisma.user.create({
-      data: { name: data.name, email, passwordHash, phone: data.phone, role: "ADMIN" },
+      data: { tenantId, name: data.name, email, passwordHash, phone: data.phone, role: "ADMIN" },
       select: SAFE_USER_SELECT,
     });
     res.status(201).json(user);
@@ -130,7 +132,10 @@ router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
     const data = updateSchema.parse(req.body);
-    const existing = await prisma.user.findUnique({ where: { id: req.params.id }, include: { salesperson: true } });
+    const existing = await prisma.user.findFirst({
+      where: { id: req.params.id, tenantId: req.auth!.tenantId },
+      include: { salesperson: true },
+    });
     if (!existing) return res.status(404).json({ error: "Not found" });
 
     if (data.role && data.role !== existing.role) {
@@ -164,7 +169,7 @@ router.post(
   "/:id/reset-password",
   asyncHandler(async (req, res) => {
     const { password } = z.object({ password: z.string().min(6) }).parse(req.body);
-    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.user.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!existing) return res.status(404).json({ error: "Not found" });
     const passwordHash = await hashPassword(password);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });

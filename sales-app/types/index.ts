@@ -80,6 +80,8 @@ export interface Visit {
   checkInAt?: string | null;
   checkInLat?: number | null;
   checkInLng?: number | null;
+  checkInDistanceMeters?: number | null;
+  checkInLocationValidated?: boolean | null;
   checkOutAt?: string | null;
   checkOutLat?: number | null;
   checkOutLng?: number | null;

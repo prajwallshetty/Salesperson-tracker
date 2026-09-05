@@ -19,9 +19,12 @@ declare global {
  * header when no cookie is present, so REST tools/scripts and any non-browser client can still
  * authenticate the same way the API worked before the cookie migration.
  *
- * Also rejects deactivated users (User.isActive === false) in real time - this hits the DB on
- * every request (a single indexed primary-key lookup), which is required to make admin
- * deactivation take effect immediately rather than waiting for the JWT to expire.
+ * Also rejects deactivated users (User.isActive === false) and suspended tenants in real time -
+ * this hits the DB on every request (a single indexed primary-key lookup with its tenant
+ * joined), which is required to make admin deactivation AND tenant suspension take effect
+ * immediately rather than waiting for the JWT to expire. `req.auth.tenantId` comes from the
+ * signed token (set once at login from the DB, never client-supplied) - every tenant-scoped
+ * query in every route reads it from here, never from a request body/query param/header.
  */
 export const requireAuth = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const cookieToken = (req as any).cookies?.[AUTH_COOKIE_NAME] as string | undefined;
@@ -40,14 +43,23 @@ export const requireAuth = asyncHandler(async (req: Request, res: Response, next
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
+  let user: { isActive: boolean; tenant: { status: string } } | null = null;
   try {
-    const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { isActive: true } });
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: "Account is deactivated" });
-    }
+    user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { isActive: true, tenant: { select: { status: true } } },
+    });
   } catch (err) {
     console.error("Auth DB verification error:", err);
-    // If JWT payload is valid, proceed on transient DB connection glitches to avoid breaking UI sessions
+  }
+
+  if (user) {
+    if (!user.isActive) {
+      return res.status(401).json({ error: "Account is deactivated" });
+    }
+    if (user.tenant?.status === "SUSPENDED") {
+      return res.status(403).json({ error: "This workspace is suspended. Contact your administrator." });
+    }
   }
 
   req.auth = payload;

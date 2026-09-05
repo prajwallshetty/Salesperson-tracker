@@ -4,15 +4,18 @@
   "workspaces": [
     "server",
     "admin-web",
-    "sales-app"
+    "sales-app",
+    "landing-web"
   ],
   "scripts": {
     "dev:server": "npm run dev --workspace server",
     "dev:admin": "npm run dev --workspace admin-web",
     "dev:sales": "npm run dev --workspace sales-app",
+    "dev:landing": "npm run dev --workspace landing-web",
     "build:server": "npm run build --workspace server",
     "build:admin": "npm run build --workspace admin-web",
     "build:sales": "npm run build --workspace sales-app",
+    "build:landing": "npm run build --workspace landing-web",
     "seed": "npm run seed --workspace server"
   }
 }

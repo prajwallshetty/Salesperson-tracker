@@ -8,6 +8,8 @@ import { useAuthStore } from "@/store/auth";
 import { Avatar } from "@/components/Avatar";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/Skeleton";
+import Link from "next/link";
+import { CreditCard, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { IconLogout } from "@/components/icons";
@@ -66,6 +68,26 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {me?.role === "ADMIN" && (
+        <Card>
+          <CardContent className="p-0">
+            <Link
+              href="/billing"
+              className="flex items-center gap-4 p-5 transition-colors hover:bg-muted/50"
+            >
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                <CreditCard className="size-5" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">Billing & Subscription</p>
+                <p className="text-sm text-muted-foreground">Manage your plan, usage, and payment status.</p>
+              </div>
+              <ChevronRight className="size-4 text-muted-foreground" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-5">

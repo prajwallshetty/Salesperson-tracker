@@ -14,14 +14,21 @@ api.interceptors.response.use(
     if (typeof window !== "undefined" && error?.response?.status === 401) {
       // The cookie is invalid/expired/cleared server-side (e.g. an admin deactivated
       // this account) - drop any cached display info and hard-redirect so no stale
-      // client state or rendered page lingers. Skip the redirect for the /login page
-      // itself, since an unauthenticated GET /auth/me from there is expected to 401.
+      // client state or rendered page lingers. Skip the redirect on public pages, since an
+      // unauthenticated GET /auth/me from any of them is expected to 401 - without this list
+      // a public page other than /login (e.g. /signup) would immediately bounce a fresh,
+      // never-logged-in visitor straight to /login before they could even see it.
+      const PUBLIC_PATHS = ["/login", "/signup"];
       try {
         localStorage.removeItem("sf_user");
       } catch {
         // ignore (private mode / storage disabled)
       }
-      if (window.location.pathname !== "/login") {
+      // /super-admin/* is a different auth system entirely (platform admin, see
+      // lib/platformApi.ts) - a 401 on this tenant client there must never redirect to the
+      // tenant /login, which would bounce a platform admin out of their own section.
+      const isPlatformSection = window.location.pathname.startsWith("/super-admin");
+      if (!isPlatformSection && !PUBLIC_PATHS.includes(window.location.pathname)) {
         window.location.href = "/login";
       }
     }

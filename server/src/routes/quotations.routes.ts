@@ -14,8 +14,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { status, salespersonId, customerId } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (status) where.status = status;
@@ -32,8 +33,11 @@ router.get(
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const quotation = await prisma.quotation.findUnique({
-      where: { id: req.params.id },
+    const tenantId = req.auth!.tenantId;
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const quotation = await prisma.quotation.findFirst({
+      where,
       include: { customer: true, items: { include: { product: true } } },
     });
     if (!quotation) return res.status(404).json({ error: "Not found" });
@@ -53,8 +57,8 @@ const createSchema = z.object({
   notes: z.string().optional(),
 });
 
-async function buildLines(items: z.infer<typeof itemSchema>[], customerId: string) {
-  const { resolve } = await resolvePricingForItems(items.map((i) => i.productId), customerId);
+async function buildLines(tenantId: string, items: z.infer<typeof itemSchema>[], customerId: string) {
+  const { resolve } = await resolvePricingForItems(tenantId, items.map((i) => i.productId), customerId);
   return items.map((i) => {
     const hit = resolve(i.productId);
     if (!hit) throw Object.assign(new Error(`Product ${i.productId} not found`), { status: 400 });
@@ -71,13 +75,21 @@ async function buildLines(items: z.infer<typeof itemSchema>[], customerId: strin
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = createSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
-    const lines = await buildLines(data.items, data.customerId);
+    const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId } });
+    if (!customer) return res.status(400).json({ error: "Customer not found" });
+    if (req.auth!.role === "ADMIN") {
+      const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
+      if (!owner) return res.status(400).json({ error: "Salesperson not found" });
+    }
+    const lines = await buildLines(tenantId, data.items, data.customerId);
     const totals = computeDocumentTotals(lines);
 
     const quotation = await prisma.quotation.create({
       data: {
+        tenantId,
         number: docNumber("QT"),
         salespersonId,
         customerId: data.customerId,
@@ -103,7 +115,12 @@ router.post(
 router.patch(
   "/:id/status",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { status } = z.object({ status: z.enum(["DRAFT", "SENT", "ACCEPTED", "REJECTED"]) }).parse(req.body);
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.quotation.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const quotation = await prisma.quotation.update({ where: { id: req.params.id }, data: { status } });
     res.json(quotation);
   })
@@ -112,8 +129,11 @@ router.patch(
 router.post(
   "/:id/convert",
   asyncHandler(async (req, res) => {
-    const quotation = await prisma.quotation.findUnique({
-      where: { id: req.params.id },
+    const tenantId = req.auth!.tenantId;
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const quotation = await prisma.quotation.findFirst({
+      where,
       include: { items: true, customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
     if (!quotation) return res.status(404).json({ error: "Quotation not found" });
@@ -121,6 +141,7 @@ router.post(
 
     const order = await prisma.order.create({
       data: {
+        tenantId,
         number: docNumber("SO"),
         salespersonId: quotation.salespersonId,
         customerId: quotation.customerId,
@@ -149,6 +170,7 @@ router.post(
     });
 
     await notifyAdmins(
+      tenantId,
       "ORDER_CREATED",
       "New sales order",
       `${quotation.salesperson.user.name} created order ${order.number} for ${quotation.customer.name}`,

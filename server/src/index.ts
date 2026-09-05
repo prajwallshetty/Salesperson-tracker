@@ -26,6 +26,11 @@ import notificationsRoutes from "./routes/notifications.routes";
 import targetsRoutes from "./routes/targets.routes";
 import attendanceRoutes from "./routes/attendance.routes";
 import usersRoutes from "./routes/users.routes";
+import platformRoutes from "./routes/platform.routes";
+import platformOpsRoutes from "./routes/platformOps.routes";
+import publicRoutes from "./routes/public.routes";
+import billingRoutes from "./routes/billing.routes";
+import razorpayWebhookRoutes from "./routes/razorpayWebhook.routes";
 
 import { setIO } from "./sockets/io";
 import { registerLocationSocket } from "./sockets/locationSocket";
@@ -53,7 +58,14 @@ if (isProduction && allowedOrigins.length === 0) {
       "CLIENT_ORIGIN=https://admin.example.com,https://app.example.com"
   );
 }
-const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : isProduction ? [] : ["http://localhost:5173", "http://localhost:5174"];
+const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : isProduction ? [] : ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"];
+
+// Trust exactly one hop (the platform's own reverse proxy/load balancer) in production, so
+// req.ip / X-Forwarded-For based logic - the rate limiters below - keys on the real client IP
+// instead of the proxy's. Never `true` (trust every hop): that lets a client spoof its own
+// X-Forwarded-For and bypass IP-based rate limiting entirely. Left unset in development, where
+// there's no proxy in front of the dev server.
+if (isProduction) app.set("trust proxy", 1);
 
 const io = new Server(server, {
   cors: { origin: corsOrigin, credentials: true },
@@ -67,6 +79,12 @@ app.use(
     credentials: true,
   })
 );
+
+// Mounted before express.json() - this route needs the exact raw request bytes to verify
+// Razorpay's webhook signature (see routes/razorpayWebhook.routes.ts's top comment). Every
+// other route needs a parsed JSON body, which is why this one line has to come first.
+app.use("/api/billing/razorpay", razorpayWebhookRoutes);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(redactAccessCode);
@@ -74,6 +92,7 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+app.use("/api/public", publicRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/salespersons", salespersonsRoutes);
 app.use("/api/territories", territoriesRoutes);
@@ -94,6 +113,9 @@ app.use("/api/notifications", notificationsRoutes);
 app.use("/api/targets", targetsRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/platform", platformRoutes);
+app.use("/api/platform", platformOpsRoutes);
+app.use("/api/billing", billingRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.name === "ZodError") {

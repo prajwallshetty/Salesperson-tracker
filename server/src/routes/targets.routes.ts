@@ -3,18 +3,21 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { requireActiveSubscription, requireFeature } from "../lib/entitlements";
 
 const router = Router();
 // Admin-wide target listing/editing exposes every salesperson's targets, so gate the whole
 // router to ADMIN (per-salesperson target read/create already exists at
-// GET/POST /api/salespersons/:id/targets, available to admins and the salesperson themself).
-router.use(requireAuth, requireRole("ADMIN"));
+// GET/POST /api/salespersons/:id/targets, available to admins and the salesperson themself -
+// gated the same way there for consistency).
+router.use(requireAuth, requireRole("ADMIN"), requireActiveSubscription(), requireFeature("targets"));
 
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { salespersonId, territoryId, period, page = "1", pageSize = "20" } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (salespersonId) where.salespersonId = salespersonId;
     if (period) where.period = period;
     if (territoryId) where.salesperson = { territoryId };
@@ -61,6 +64,8 @@ router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
     const data = updateSchema.parse(req.body);
+    const existing = await prisma.target.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const target = await prisma.target.update({
       where: { id: req.params.id },
       data: {
@@ -77,6 +82,8 @@ router.patch(
 router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
+    const existing = await prisma.target.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     await prisma.target.delete({ where: { id: req.params.id } });
     res.status(204).end();
   })

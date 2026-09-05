@@ -3,12 +3,15 @@ import { prisma } from "../lib/prisma";
 import { getIO } from "../sockets/io";
 
 export async function notifyAdmins(
+  tenantId: string,
   type: NotificationType,
   title: string,
   message: string,
   metadata?: Record<string, unknown>
 ) {
-  const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
+  // Scoped to the calling tenant only - without this an event in one tenant (e.g. an order
+  // created by Prestige) would notify every ADMIN across every tenant on the platform.
+  const admins = await prisma.user.findMany({ where: { role: "ADMIN", tenantId }, select: { id: true } });
   if (admins.length === 0) return;
   await prisma.notification.createMany({
     data: admins.map((a) => ({
@@ -20,7 +23,7 @@ export async function notifyAdmins(
     })),
   });
   try {
-    getIO().to("admins").emit("notification:new", {
+    getIO().to(`admins:${tenantId}`).emit("notification:new", {
       type,
       title,
       message,

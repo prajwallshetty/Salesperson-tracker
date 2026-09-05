@@ -33,6 +33,13 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: backendImagePattern(),
   },
+  // @ducanh2912/next-pwa injects a `webpack` key into the config it wraps (for its Workbox
+  // build step); Next 16 defaults to Turbopack and refuses to proceed when it sees a bare
+  // `webpack` key with no matching `turbopack` key, in case that config was meant for
+  // Turbopack instead. An empty object here is Next's own documented way to say "this webpack
+  // config is intentional (from a plugin), there's nothing to migrate" - the PWA build step
+  // still runs via its own webpack config, this doesn't disable it.
+  turbopack: {},
 };
 
 export default withPWA(nextConfig);

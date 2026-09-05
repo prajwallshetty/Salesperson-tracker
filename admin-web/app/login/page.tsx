@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
@@ -83,7 +84,10 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            Demo admin: admin@salesforcepro.com / Admin@123
+            New company?{" "}
+            <Link href="/signup" className="font-medium text-brand-600 hover:underline">
+              Create a workspace
+            </Link>
           </p>
         </div>
       </div>

@@ -10,8 +10,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { status, salespersonId } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
 
@@ -45,10 +46,15 @@ const followUpSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = followUpSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+    if (req.auth!.role === "ADMIN") {
+      const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
+      if (!owner) return res.status(400).json({ error: "Salesperson not found" });
+    }
     const followUp = await prisma.followUp.create({
-      data: { ...data, dueDate: new Date(data.dueDate), salespersonId },
+      data: { ...data, tenantId, dueDate: new Date(data.dueDate), salespersonId },
     });
     res.status(201).json(followUp);
   })
@@ -57,6 +63,11 @@ router.post(
 router.patch(
   "/:id/complete",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.followUp.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const followUp = await prisma.followUp.update({
       where: { id: req.params.id },
       data: { status: "COMPLETED", completedAt: new Date() },
@@ -68,7 +79,12 @@ router.patch(
 router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = followUpSchema.partial().parse(req.body);
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.followUp.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const followUp = await prisma.followUp.update({
       where: { id: req.params.id },
       data: { ...data, dueDate: data.dueDate ? new Date(data.dueDate) : undefined },

@@ -10,8 +10,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { status, salespersonId, search, limit } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (status) where.status = status;
@@ -39,9 +40,14 @@ const leadSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = leadSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
-    const lead = await prisma.lead.create({ data: { ...data, salespersonId } });
+    if (req.auth!.role === "ADMIN") {
+      const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
+      if (!owner) return res.status(400).json({ error: "Salesperson not found" });
+    }
+    const lead = await prisma.lead.create({ data: { ...data, tenantId, salespersonId } });
     res.status(201).json(lead);
   })
 );
@@ -49,7 +55,12 @@ router.post(
 router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = leadSchema.partial().extend({ status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "NEGOTIATION", "CONVERTED", "LOST"]).optional() }).parse(req.body);
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.lead.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const lead = await prisma.lead.update({ where: { id: req.params.id }, data });
     res.json(lead);
   })
@@ -58,14 +69,18 @@ router.patch(
 router.post(
   "/:id/convert",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { address, lat, lng, territoryId } = z
       .object({ address: z.string().optional(), lat: z.number().optional(), lng: z.number().optional(), territoryId: z.string().optional() })
       .parse(req.body);
-    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const lead = await prisma.lead.findFirst({ where });
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
     const customer = await prisma.customer.create({
       data: {
+        tenantId,
         name: lead.company || lead.name,
         phone: lead.phone,
         email: lead.email,

@@ -23,11 +23,12 @@ router.get(
       pageSize = "50",
     } = req.query as Record<string, string>;
 
-    const where: any = {};
+    const tenantId = req.auth!.tenantId;
+    const where: any = { tenantId };
 
     if (req.auth!.role === "SALESPERSON") {
       const reports = await prisma.salesperson.findMany({
-        where: { managerId: req.auth!.salespersonId },
+        where: { tenantId, managerId: req.auth!.salespersonId },
         select: { id: true },
       });
       const allowedIds = [req.auth!.salespersonId!, ...reports.map((r) => r.id)];

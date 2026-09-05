@@ -10,17 +10,43 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 export interface TokenPayload {
+  kind: "tenant";
   userId: string;
   role: "ADMIN" | "SALESPERSON";
   salespersonId?: string;
+  // Set once at login from the matched User row (never client-supplied) and never changes
+  // for a given user afterward - see middleware/auth.ts's requireAuth for why this is still
+  // re-verified against the live Tenant row on every request rather than trusted blindly for
+  // the tenant's current status.
+  tenantId: string;
 }
 
-export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
+// Platform-level staff (SalesGrid's own team, not a tenant's ADMIN) authenticate with a
+// completely separate token shape/cookie/middleware - see middleware/platformAuth.ts - so a
+// tenant token can never be mistaken for (or escalated into) platform access, and vice versa.
+export interface PlatformTokenPayload {
+  kind: "platform";
+  platformAdminId: string;
+}
+
+export function signToken(payload: Omit<TokenPayload, "kind">): string {
+  return jwt.sign({ ...payload, kind: "tenant" }, JWT_SECRET, { expiresIn: "30d" });
 }
 
 export function verifyToken(token: string): TokenPayload {
-  return jwt.verify(token, JWT_SECRET) as TokenPayload;
+  const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
+  if (payload.kind !== "tenant") throw new Error("Not a tenant token");
+  return payload;
+}
+
+export function signPlatformToken(payload: Omit<PlatformTokenPayload, "kind">): string {
+  return jwt.sign({ ...payload, kind: "platform" }, JWT_SECRET, { expiresIn: "30d" });
+}
+
+export function verifyPlatformToken(token: string): PlatformTokenPayload {
+  const payload = jwt.verify(token, JWT_SECRET) as PlatformTokenPayload;
+  if (payload.kind !== "platform") throw new Error("Not a platform token");
+  return payload;
 }
 
 export function hashPassword(password: string): Promise<string> {

@@ -6,8 +6,8 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth } from "../middleware/auth";
 import { notifyAdmins } from "../services/notifications";
-import { haversineKm } from "../utils/geo";
 import { SAFE_USER_SELECT } from "../lib/selects";
+import { checkGeofence } from "../lib/geofence";
 
 const router = Router();
 router.use(requireAuth);
@@ -31,6 +31,7 @@ const upload = multer({
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const {
       status,
       outcome,
@@ -44,7 +45,7 @@ router.get(
       page,
       pageSize,
     } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     else if (salespersonId) where.salespersonId = salespersonId;
     if (status) where.status = status;
@@ -98,10 +99,18 @@ const createSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = createSchema.parse(req.body);
     const salespersonId = req.auth!.role === "SALESPERSON" ? req.auth!.salespersonId! : req.body.salespersonId;
+    const customer = await prisma.customer.findFirst({ where: { id: data.customerId, tenantId } });
+    if (!customer) return res.status(400).json({ error: "Customer not found" });
+    if (req.auth!.role === "ADMIN") {
+      const owner = await prisma.salesperson.findFirst({ where: { id: salespersonId, tenantId } });
+      if (!owner) return res.status(400).json({ error: "Salesperson not found" });
+    }
     const visit = await prisma.visit.create({
       data: {
+        tenantId,
         salespersonId,
         customerId: data.customerId,
         plannedAt: data.plannedAt ? new Date(data.plannedAt) : undefined,
@@ -116,9 +125,10 @@ router.post(
 router.post(
   "/:id/checkin",
   asyncHandler(async (req, res) => {
-    const { lat, lng } = z.object({ lat: z.number(), lng: z.number() }).parse(req.body);
+    const tenantId = req.auth!.tenantId;
+    const { lat, lng, accuracy } = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), accuracy: z.number().nonnegative().optional() }).parse(req.body);
 
-    const existing = await prisma.visit.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.visit.findFirst({ where: { id: req.params.id, tenantId }, include: { customer: true } });
     if (!existing) return res.status(404).json({ error: "Visit not found" });
     if (req.auth!.role === "SALESPERSON" && existing.salespersonId !== req.auth!.salespersonId) {
       return res.status(403).json({ error: "This visit does not belong to you" });
@@ -129,9 +139,32 @@ router.post(
       });
     }
 
+    // Geofence is a soft, audited check, not a hard block: customer coordinates are often
+    // imprecisely geocoded and consumer GPS accuracy can be tens of meters, so rejecting a
+    // check-in outright here would risk blocking a genuinely present salesperson. The distance
+    // and validation outcome are stored either way (client sends checkInDistanceMeters/
+    // checkInLocationValidated back to the salesperson as an honest "you appear to be away from
+    // the customer" notice; never a client-supplied `checkedIn`/validated boolean going the other
+    // direction - both are computed here, server-side, from the customer's real stored location).
+    let checkInDistanceMeters: number | null = null;
+    let checkInLocationValidated: boolean | null = null;
+    if (existing.customer.lat != null && existing.customer.lng != null) {
+      const geofence = checkGeofence(lat, lng, existing.customer.lat, existing.customer.lng);
+      checkInDistanceMeters = Math.round(geofence.distanceMeters);
+      checkInLocationValidated = geofence.withinRadius;
+    }
+
     const visit = await prisma.visit.update({
       where: { id: req.params.id },
-      data: { status: "IN_PROGRESS", checkInAt: new Date(), checkInLat: lat, checkInLng: lng },
+      data: {
+        status: "IN_PROGRESS",
+        checkInAt: new Date(),
+        checkInLat: lat,
+        checkInLng: lng,
+        checkInAccuracy: accuracy,
+        checkInDistanceMeters,
+        checkInLocationValidated,
+      },
       include: { customer: true, salesperson: { include: { user: { select: SAFE_USER_SELECT } } } },
     });
 
@@ -141,6 +174,7 @@ router.post(
     });
 
     await notifyAdmins(
+      tenantId,
       "CUSTOMER_REACHED",
       "Salesperson reached customer",
       `${visit.salesperson.user.name} checked in at ${visit.customer.name}`,
@@ -154,10 +188,12 @@ router.post(
 router.post(
   "/:id/checkout",
   asyncHandler(async (req, res) => {
-    const { lat, lng, notes, outcome, followUpDate, photoUrls } = z
+    const tenantId = req.auth!.tenantId;
+    const { lat, lng, accuracy, notes, outcome, followUpDate, photoUrls } = z
       .object({
-        lat: z.number(),
-        lng: z.number(),
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+        accuracy: z.number().nonnegative().optional(),
         notes: z.string().optional(),
         outcome: z
           .enum(["ORDER_PLACED", "FOLLOW_UP_REQUIRED", "NOT_INTERESTED", "NO_RESPONSE", "PAYMENT_COLLECTED", "OTHER"])
@@ -167,7 +203,7 @@ router.post(
       })
       .parse(req.body);
 
-    const existing = await prisma.visit.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.visit.findFirst({ where: { id: req.params.id, tenantId } });
     if (!existing) return res.status(404).json({ error: "Visit not found" });
     if (req.auth!.role === "SALESPERSON" && existing.salespersonId !== req.auth!.salespersonId) {
       return res.status(403).json({ error: "This visit does not belong to you" });
@@ -193,6 +229,7 @@ router.post(
         checkOutAt,
         checkOutLat: lat,
         checkOutLng: lng,
+        checkOutAccuracy: accuracy,
         durationMin,
         notes,
         outcome,
@@ -205,6 +242,7 @@ router.post(
     if (followUpDate) {
       await prisma.followUp.create({
         data: {
+          tenantId,
           salespersonId: visit.salespersonId,
           customerId: visit.customerId,
           dueDate: new Date(followUpDate),
@@ -214,6 +252,7 @@ router.post(
     }
 
     await notifyAdmins(
+      tenantId,
       "VISIT_COMPLETED",
       "Customer visit completed",
       `${visit.salesperson.user.name} completed a visit to ${visit.customer.name}`,
@@ -228,10 +267,13 @@ router.post(
   "/:id/photos",
   upload.array("photos", 5),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const visit = await prisma.visit.findFirst({ where });
+    if (!visit) return res.status(404).json({ error: "Visit not found" });
     const files = (req.files as Express.Multer.File[]) || [];
     const urls = files.map((f) => `/uploads/${f.filename}`);
-    const visit = await prisma.visit.findUnique({ where: { id: req.params.id } });
-    if (!visit) return res.status(404).json({ error: "Visit not found" });
     const updated = await prisma.visit.update({
       where: { id: req.params.id },
       data: { photoUrls: [...visit.photoUrls, ...urls] },
@@ -243,6 +285,7 @@ router.post(
 router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = z
       .object({
         notes: z.string().optional(),
@@ -250,6 +293,20 @@ router.patch(
         followUpDate: z.string().optional(),
       })
       .parse(req.body);
+    // A salesperson must reach IN_PROGRESS/COMPLETED only through the real GPS-validated
+    // checkin/checkout flow above, never by directly PATCHing status - otherwise a visit could be
+    // marked "completed" (with a customer notified, sales credit recorded, etc.) with no actual
+    // check-in ever having happened. MISSED/CANCELLED stay salesperson-settable (a genuine
+    // "the customer cancelled" housekeeping action, not a way to fake a completed visit); a full
+    // status admin-only override remains available for corrections.
+    if (req.auth!.role === "SALESPERSON" && data.status && !["MISSED", "CANCELLED"].includes(data.status)) {
+      return res.status(403).json({ error: "Use check-in/check-out to update this visit's status." });
+    }
+
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.visit.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const visit = await prisma.visit.update({
       where: { id: req.params.id },
       data: {

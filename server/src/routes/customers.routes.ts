@@ -11,8 +11,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { search, territoryId, salespersonId, page = "1", pageSize = "20" } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (req.auth!.role === "SALESPERSON") {
       where.salespersonId = req.auth!.salespersonId;
     } else if (salespersonId) {
@@ -46,7 +47,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { lat, lng, radiusKm = "10" } = req.query as Record<string, string>;
     if (!lat || !lng) return res.status(400).json({ error: "lat and lng are required" });
-    const where: any = { lat: { not: null }, lng: { not: null } };
+    const where: any = { tenantId: req.auth!.tenantId, lat: { not: null }, lng: { not: null } };
     if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
     const customers = await prisma.customer.findMany({ where });
     const latN = parseFloat(lat);
@@ -63,8 +64,10 @@ router.get(
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const customer = await prisma.customer.findUnique({
-      where: { id: req.params.id },
+    const where: any = { id: req.params.id, tenantId: req.auth!.tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const customer = await prisma.customer.findFirst({
+      where,
       include: {
         territory: true,
         salesperson: { include: { user: { select: { name: true } } } },
@@ -93,9 +96,10 @@ const customerSchema = z.object({
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = customerSchema.parse(req.body);
     if (req.auth!.role === "SALESPERSON") data.salespersonId = req.auth!.salespersonId;
-    const customer = await prisma.customer.create({ data });
+    const customer = await prisma.customer.create({ data: { ...data, tenantId } });
     res.status(201).json(customer);
   })
 );
@@ -103,8 +107,13 @@ router.post(
 router.patch(
   "/:id",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = customerSchema.partial().parse(req.body);
     if (req.auth!.role === "SALESPERSON") delete data.salespersonId;
+    const where: any = { id: req.params.id, tenantId };
+    if (req.auth!.role === "SALESPERSON") where.salespersonId = req.auth!.salespersonId;
+    const existing = await prisma.customer.findFirst({ where });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const customer = await prisma.customer.update({ where: { id: req.params.id }, data });
     res.json(customer);
   })
@@ -114,6 +123,8 @@ router.delete(
   "/:id",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const existing = await prisma.customer.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     await prisma.customer.delete({ where: { id: req.params.id } });
     res.status(204).end();
   })

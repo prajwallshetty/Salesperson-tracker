@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { requireActiveSubscription, requireFeature } from "../lib/entitlements";
 import { createSalespersonAccount } from "../services/accounts";
 import { SAFE_USER_SELECT } from "../lib/selects";
 import { generateUniqueAccessCode } from "../lib/accessCode";
@@ -16,8 +17,9 @@ router.get(
   "/",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { status, territoryId, managerId, search, page = "1", pageSize = "20" } = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { tenantId };
     if (status) where.status = status;
     if (territoryId) where.territoryId = territoryId;
     if (managerId) where.managerId = managerId;
@@ -66,8 +68,17 @@ router.post(
   "/",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = createSchema.parse(req.body);
-    const salesperson = await createSalespersonAccount(data);
+    if (data.territoryId) {
+      const territory = await prisma.territory.findFirst({ where: { id: data.territoryId, tenantId } });
+      if (!territory) return res.status(400).json({ error: "Territory not found" });
+    }
+    if (data.managerId) {
+      const manager = await prisma.salesperson.findFirst({ where: { id: data.managerId, tenantId } });
+      if (!manager) return res.status(400).json({ error: "Manager not found" });
+    }
+    const salesperson = await createSalespersonAccount(tenantId, data);
     // The admin who just created this account needs to see the generated access code once.
     res.locals.allowAccessCode = true;
     res.status(201).json(salesperson);
@@ -77,11 +88,12 @@ router.post(
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const sp = await prisma.salesperson.findUnique({
-      where: { id: req.params.id },
+    const sp = await prisma.salesperson.findFirst({
+      where: { id: req.params.id, tenantId },
       include: {
         user: { select: { id: true, name: true, email: true, phone: true, avatarUrl: true } },
         territory: true,
@@ -106,9 +118,18 @@ router.patch(
   "/:id",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const data = updateSchema.parse(req.body);
-    const existing = await prisma.salesperson.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.salesperson.findFirst({ where: { id: req.params.id, tenantId } });
     if (!existing) return res.status(404).json({ error: "Not found" });
+    if (data.territoryId) {
+      const territory = await prisma.territory.findFirst({ where: { id: data.territoryId, tenantId } });
+      if (!territory) return res.status(400).json({ error: "Territory not found" });
+    }
+    if (data.managerId) {
+      const manager = await prisma.salesperson.findFirst({ where: { id: data.managerId, tenantId } });
+      if (!manager) return res.status(400).json({ error: "Manager not found" });
+    }
 
     if (data.name !== undefined || data.phone !== undefined) {
       await prisma.user.update({
@@ -135,6 +156,8 @@ router.patch(
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
     const { status } = z.object({ status: z.enum(["ACTIVE", "INACTIVE"]) }).parse(req.body);
+    const existing = await prisma.salesperson.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
     const sp = await prisma.salesperson.update({
       where: { id: req.params.id },
       data: { status },
@@ -151,8 +174,8 @@ router.get(
   "/:id/access-code",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
-    const sp = await prisma.salesperson.findUnique({
-      where: { id: req.params.id },
+    const sp = await prisma.salesperson.findFirst({
+      where: { id: req.params.id, tenantId: req.auth!.tenantId },
       select: { accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
     });
     if (!sp) return res.status(404).json({ error: "Not found" });
@@ -165,7 +188,7 @@ router.post(
   "/:id/access-code/regenerate",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.salesperson.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.salesperson.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!existing) return res.status(404).json({ error: "Not found" });
     const accessCode = await generateUniqueAccessCode();
     const sp = await prisma.salesperson.update({
@@ -183,7 +206,7 @@ router.patch(
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
     const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
-    const existing = await prisma.salesperson.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.salesperson.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!existing) return res.status(404).json({ error: "Not found" });
     const sp = await prisma.salesperson.update({
       where: { id: req.params.id },
@@ -199,19 +222,27 @@ router.post(
   "/:id/assign-customers",
   requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { customerIds } = z.object({ customerIds: z.array(z.string()) }).parse(req.body);
-    await prisma.customer.updateMany({
-      where: { id: { in: customerIds } },
+    const salesperson = await prisma.salesperson.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!salesperson) return res.status(404).json({ error: "Not found" });
+    // updateMany's where also carries tenantId, so a customerId belonging to another tenant
+    // simply doesn't match and is silently skipped rather than reassigned.
+    const result = await prisma.customer.updateMany({
+      where: { id: { in: customerIds }, tenantId },
       data: { salespersonId: req.params.id },
     });
-    res.json({ ok: true, count: customerIds.length });
+    res.json({ ok: true, count: result.count });
   })
 );
 
 router.post(
   "/:id/targets",
   requireRole("ADMIN"),
+  requireActiveSubscription(),
+  requireFeature("targets"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     const { period, periodStart, periodEnd, targetAmount } = z
       .object({
         period: z.enum(["DAILY", "WEEKLY", "MONTHLY"]),
@@ -220,8 +251,11 @@ router.post(
         targetAmount: z.number().positive(),
       })
       .parse(req.body);
+    const salesperson = await prisma.salesperson.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!salesperson) return res.status(404).json({ error: "Not found" });
     const target = await prisma.target.create({
       data: {
+        tenantId,
         salespersonId: req.params.id,
         period,
         periodStart: new Date(periodStart),
@@ -235,12 +269,15 @@ router.post(
 
 router.get(
   "/:id/targets",
+  requireActiveSubscription(),
+  requireFeature("targets"),
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const targets = await prisma.target.findMany({
-      where: { salespersonId: req.params.id },
+      where: { salespersonId: req.params.id, tenantId },
       orderBy: { periodStart: "desc" },
     });
     res.json(targets);
@@ -250,11 +287,12 @@ router.get(
 router.get(
   "/:id/attendance",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const records = await prisma.attendance.findMany({
-      where: { salespersonId: req.params.id },
+      where: { salespersonId: req.params.id, tenantId },
       orderBy: { date: "desc" },
       take: 60,
     });
@@ -265,11 +303,12 @@ router.get(
 router.get(
   "/:id/visits",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const visits = await prisma.visit.findMany({
-      where: { salespersonId: req.params.id },
+      where: { salespersonId: req.params.id, tenantId },
       include: { customer: true },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -281,11 +320,12 @@ router.get(
 router.get(
   "/:id/orders",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const orders = await prisma.order.findMany({
-      where: { salespersonId: req.params.id },
+      where: { salespersonId: req.params.id, tenantId },
       include: { customer: true, items: { include: { product: true } } },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -297,11 +337,12 @@ router.get(
 router.get(
   "/:id/collections",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const collections = await prisma.collection.findMany({
-      where: { salespersonId: req.params.id },
+      where: { salespersonId: req.params.id, tenantId },
       include: { customer: true },
       orderBy: { collectedAt: "desc" },
       take: 100,
@@ -313,11 +354,12 @@ router.get(
 router.get(
   "/:id/customers",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const customers = await prisma.customer.findMany({
-      where: { salespersonId: req.params.id },
+      where: { salespersonId: req.params.id, tenantId },
       orderBy: { name: "asc" },
     });
     res.json(customers);
@@ -327,10 +369,13 @@ router.get(
 router.get(
   "/:id/performance-summary",
   asyncHandler(async (req, res) => {
+    const tenantId = req.auth!.tenantId;
     if (req.auth!.role === "SALESPERSON" && req.auth!.salespersonId !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const id = req.params.id;
+    const salesperson = await prisma.salesperson.findFirst({ where: { id, tenantId } });
+    if (!salesperson) return res.status(404).json({ error: "Not found" });
     const now = new Date();
     const [todayOrders, monthOrders, visitsToday, followupsPending, collectionsMonth] = await Promise.all([
       prisma.order.aggregate({

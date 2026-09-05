@@ -14,6 +14,8 @@ router.get(
       return res.status(403).json({ error: "Forbidden" });
     }
     const id = req.params.salespersonId;
+    const target_ = await prisma.salesperson.findFirst({ where: { id, tenantId: req.auth!.tenantId }, select: { id: true } });
+    if (!target_) return res.status(404).json({ error: "Not found" });
     const now = new Date();
 
     const [
@@ -71,7 +73,7 @@ router.get(
     const lte = range === "today" ? endOfDay(now) : range === "week" ? now : endOfMonth(now);
 
     const salespersons = await prisma.salesperson.findMany({
-      where: { status: "ACTIVE" },
+      where: { tenantId: req.auth!.tenantId, status: "ACTIVE" },
       include: { user: { select: { name: true, avatarUrl: true } } },
     });
     const ids = salespersons.map((sp) => sp.id);

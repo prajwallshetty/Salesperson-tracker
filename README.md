@@ -25,6 +25,7 @@ server/       Express + TypeScript + Prisma (PostgreSQL) + Socket.IO API
 admin-web/    Admin dashboard — Next.js 16 (App Router) + TypeScript + Tailwind
 sales-app/    Salesperson field PWA — Next.js 16 (App Router) + TypeScript + Tailwind
 API_CONTRACT.md   Full REST + Socket.IO contract shared by both frontends
+BILLING.md        Multi-tenant subscriptions, Razorpay setup, Super Admin platform
 MIGRATION_PLAN.md Vite → Next.js migration plan and rationale
 ```
 
