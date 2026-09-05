@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Same HSL tokens as admin-web/app/globals.css (see that file's comment) - kept in sync by
+   hand since the two apps don't share a build-time package. */
+@layer base {
+  :root {
+    --radius: 1rem;
+    --background: 250 33% 99%;
+    --foreground: 240 15% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 15% 15%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --primary-soft: 262 90% 96%;
+    --muted: 240 20% 96%;
+    --muted-foreground: 240 8% 46%;
+    --success: 142 71% 40%;
+    --success-soft: 142 76% 95%;
+    --border: 240 18% 90%;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-background text-foreground antialiased font-sans;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

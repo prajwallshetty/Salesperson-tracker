@@ -27,6 +27,7 @@ import targetsRoutes from "./routes/targets.routes";
 import attendanceRoutes from "./routes/attendance.routes";
 import usersRoutes from "./routes/users.routes";
 import platformRoutes from "./routes/platform.routes";
+import publicRoutes from "./routes/public.routes";
 
 import { setIO } from "./sockets/io";
 import { registerLocationSocket } from "./sockets/locationSocket";
@@ -54,7 +55,7 @@ if (isProduction && allowedOrigins.length === 0) {
       "CLIENT_ORIGIN=https://admin.example.com,https://app.example.com"
   );
 }
-const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : isProduction ? [] : ["http://localhost:5173", "http://localhost:5174"];
+const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : isProduction ? [] : ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"];
 
 const io = new Server(server, {
   cors: { origin: corsOrigin, credentials: true },
@@ -75,6 +76,7 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+app.use("/api/public", publicRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/salespersons", salespersonsRoutes);
 app.use("/api/territories", territoriesRoutes);
