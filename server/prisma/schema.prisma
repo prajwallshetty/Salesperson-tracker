@@ -228,6 +228,7 @@ model Subscription {
   @@index([status])
   @@index([providerSubscriptionId])
   @@index([providerCustomerId])
+  @@index([currentPeriodEnd])
 }
 
 // One Razorpay customer per tenant, reused across subscription changes/renewals so a tenant
@@ -297,6 +298,7 @@ model User {
   phone        String?
   avatarUrl    String?
   isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

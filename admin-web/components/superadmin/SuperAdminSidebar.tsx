@@ -2,17 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Building2, CreditCard, Wallet, Tags, Webhook, BarChart3, Settings, ShieldCheck } from "lucide-react";
+import { LayoutGrid, Building2, Users, MapPinned, CreditCard, Wallet, Tags, TrendingUp, Webhook, BarChart3, Activity, HeartPulse, Settings, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { label: "Dashboard", href: "/super-admin/dashboard", icon: LayoutGrid },
+  { label: "Overview", href: "/super-admin/dashboard", icon: LayoutGrid },
   { label: "Tenants", href: "/super-admin/tenants", icon: Building2 },
+  { label: "Users", href: "/super-admin/users", icon: Users },
+  { label: "Salespeople", href: "/super-admin/salespeople", icon: MapPinned },
   { label: "Subscriptions", href: "/super-admin/subscriptions", icon: CreditCard },
   { label: "Payments", href: "/super-admin/payments", icon: Wallet },
   { label: "Plans", href: "/super-admin/plans", icon: Tags },
-  { label: "Billing Events", href: "/super-admin/billing-events", icon: Webhook },
+  { label: "Revenue", href: "/super-admin/revenue", icon: TrendingUp },
   { label: "Analytics", href: "/super-admin/analytics", icon: BarChart3 },
+  { label: "Billing Events", href: "/super-admin/billing-events", icon: Webhook },
+  { label: "Activity", href: "/super-admin/activity", icon: Activity },
+  { label: "System Health", href: "/super-admin/system-health", icon: HeartPulse },
   { label: "Settings", href: "/super-admin/settings", icon: Settings },
 ];
 

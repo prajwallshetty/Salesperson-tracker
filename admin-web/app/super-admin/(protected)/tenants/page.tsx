@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Building2, MoreHorizontal, Eye, Ban, CheckCircle2 } from "lucide-react";
+import { Building2, MoreHorizontal, Eye, Ban, CheckCircle2, Plus } from "lucide-react";
 import { platformApi } from "@/lib/platformApi";
 import { apiErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { CreateTenantDialog } from "@/components/superadmin/CreateTenantDialog";
 import { formatDate } from "@/lib/format";
 import type { Paginated, PlatformTenantListItem } from "@/types";
 
@@ -31,22 +32,38 @@ const STATUS_VARIANT: Record<string, "success" | "warning" | "muted" | "danger" 
   SUSPENDED: "danger",
 };
 
+// Two independent filters map onto the API's separate `status` (Tenant.status: ACTIVE/SUSPENDED)
+// and `subscriptionStatus` (Subscription.status) query params - a single dropdown can't express
+// both axes ("Active" tenant + "Cancelled" subscription is a real, common state to look for).
+const FILTER_OPTIONS = [
+  { value: "status:SUSPENDED", label: "Suspended (tenant)" },
+  { value: "sub:TRIALING", label: "Trial" },
+  { value: "sub:ACTIVE", label: "Active subscription" },
+  { value: "sub:PAST_DUE", label: "Past due" },
+  { value: "sub:CANCELLED", label: "Cancelled" },
+  { value: "sub:EXPIRED", label: "Expired" },
+];
+
 export default function SuperAdminTenantsPage() {
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Paginated<PlatformTenantListItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [toggling, setToggling] = useState<PlatformTenantListItem | null>(null);
+  const [creating, setCreating] = useState(false);
 
-  useEffect(() => setPage(1), [search, status]);
+  useEffect(() => setPage(1), [search, filter]);
+
+  const status = filter.startsWith("status:") ? filter.slice("status:".length) : undefined;
+  const subscriptionStatus = filter.startsWith("sub:") ? filter.slice("sub:".length) : undefined;
 
   const load = () => {
     setLoading(true);
     setError(false);
     platformApi
-      .get("/tenants", { params: { search: search || undefined, status: status || undefined, page, pageSize: PAGE_SIZE } })
+      .get("/tenants", { params: { search: search || undefined, status, subscriptionStatus, page, pageSize: PAGE_SIZE } })
       .then((res) => setData(res.data))
       .catch((err) => {
         setError(true);
@@ -55,7 +72,7 @@ export default function SuperAdminTenantsPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [search, status, page]);
+  useEffect(load, [search, status, subscriptionStatus, page]);
 
   const toggleStatus = async (t: PlatformTenantListItem) => {
     try {
@@ -70,29 +87,31 @@ export default function SuperAdminTenantsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Tenants" description="Every company using Sales Grid." />
+      <PageHeader
+        title="Tenants"
+        description="Every company using Sales Grid."
+        actions={
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> New tenant
+          </Button>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by company name..." className="w-full max-w-xs" />
-        <FilterSelect
-          value={status}
-          onChange={setStatus}
-          placeholder="All statuses"
-          options={[
-            { value: "ACTIVE", label: "Active" },
-            { value: "SUSPENDED", label: "Suspended" },
-          ]}
-        />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by company, email, or tenant ID..." className="w-full max-w-xs" />
+        <FilterSelect value={filter} onChange={setFilter} placeholder="All statuses" options={FILTER_OPTIONS} />
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Company</TableHead>
+            <TableHead>Admin</TableHead>
             <TableHead>Plan</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Salespeople</TableHead>
             <TableHead>Users</TableHead>
+            <TableHead>Trial ends</TableHead>
             <TableHead>Renewal</TableHead>
             <TableHead>Created</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -100,16 +119,16 @@ export default function SuperAdminTenantsPage() {
         </TableHeader>
         <TableBody>
           {loading ? (
-            Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
+            Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={10} />)
           ) : error ? (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={8} className="py-10">
+              <TableCell colSpan={10} className="py-10">
                 <EmptyState icon={<Building2 className="size-5" />} title="Couldn't load tenants" message="Something went wrong reaching the server." action={<Button variant="outline" size="sm" onClick={load}>Retry</Button>} />
               </TableCell>
             </TableRow>
           ) : !data || data.items.length === 0 ? (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={8} className="py-10">
+              <TableCell colSpan={10} className="py-10">
                 <EmptyState icon={<Building2 className="size-5" />} title="No tenants found" message="Try adjusting your filters." />
               </TableCell>
             </TableRow>
@@ -121,6 +140,16 @@ export default function SuperAdminTenantsPage() {
                     {t.name}
                   </Link>
                   <p className="text-xs text-muted-foreground">{t.slug}</p>
+                </TableCell>
+                <TableCell>
+                  {t.admin ? (
+                    <>
+                      <p className="text-foreground">{t.admin.name}</p>
+                      <p className="text-xs text-muted-foreground">{t.admin.email}</p>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{t.subscription?.planName ?? "-"}</TableCell>
                 <TableCell>
@@ -135,6 +164,7 @@ export default function SuperAdminTenantsPage() {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{t.salespersonCount}</TableCell>
                 <TableCell className="text-muted-foreground">{t.userCount}</TableCell>
+                <TableCell className="text-muted-foreground">{t.subscription?.trialEnd ? formatDate(t.subscription.trialEnd) : "-"}</TableCell>
                 <TableCell className="text-muted-foreground">{formatDate(t.subscription?.currentPeriodEnd)}</TableCell>
                 <TableCell className="text-muted-foreground">{formatDate(t.createdAt)}</TableCell>
                 <TableCell className="text-right">
@@ -184,6 +214,8 @@ export default function SuperAdminTenantsPage() {
         onClose={() => setToggling(null)}
         onConfirm={() => (toggling ? toggleStatus(toggling) : undefined)}
       />
+
+      <CreateTenantDialog open={creating} onClose={() => setCreating(false)} onCreated={load} />
     </div>
   );
 }

@@ -10,6 +10,10 @@ export interface AuthUser {
   avatarUrl: string | null;
   salespersonId: string | null;
   salespersonStatus: string | null;
+  // Present only on a session minted by an Owner's "Login as tenant" action (GET /auth/me only -
+  // never set on the login/signup response, since impersonation always starts from the Owner
+  // Dashboard, not a normal sign-in).
+  impersonation?: { active: true } | null;
 }
 
 export interface Territory {
@@ -503,7 +507,8 @@ export interface PlatformTenantListItem {
   createdAt: string;
   userCount: number;
   salespersonCount: number;
-  subscription: { status: SubscriptionStatus; planName: string; planKey: string; currentPeriodEnd: string | null } | null;
+  admin: { name: string; email: string } | null;
+  subscription: { status: SubscriptionStatus; planName: string; planKey: string; trialEnd: string | null; currentPeriodEnd: string | null } | null;
 }
 
 export interface PlatformTenantDetail {
@@ -520,6 +525,11 @@ export interface PlatformTenantDetail {
   userCount: number;
   salespersonCount: number;
   customerCount: number;
+  leadCount: number;
+  visitCount: number;
+  orderCount: number;
+  collectionCount: number;
+  admin: { name: string; email: string } | null;
   razorpayCustomerId: string | null;
   lastPaymentEvent: { action: string; at: string } | null;
 }
@@ -537,11 +547,75 @@ export interface PlatformBillingAuditLogItem {
 }
 
 export interface PlatformDashboardStats {
-  tenants: { total: number; active: number; suspended: number; newLast30d: number };
+  tenants: { total: number; active: number; suspended: number; trial: number; pastDue: number; newLast30d: number };
+  users: { total: number };
   subscriptions: { trialing: number; active: number; pastDue: number; cancelled: number; expired: number; suspended: number };
   salespersons: { total: number };
-  revenue: { mrr: number; arr: number; currency: string; note: string };
+  revenue: { mrr: number; arr: number; thisMonth: number; lastMonth: number; currency: string; note: string };
   failedPaymentsLast30d: number;
+  upcomingRenewals: { tenantId: string; tenantName: string; planName: string; renewalDate: string; amount: number; billingInterval: BillingInterval; status: SubscriptionStatus }[];
+  recentFailedPayments: { billingEventId: string; tenantId: string | null; tenantName: string | null; amount: number | null; currency: string; createdAt: string }[];
+}
+
+export interface PlatformUserItem {
+  id: string;
+  name: string;
+  email: string;
+  role: "ADMIN" | "SALESPERSON";
+  isActive: boolean;
+  tenantId: string;
+  tenantName: string;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface PlatformSalespersonItem {
+  id: string;
+  name: string;
+  employeeCode: string;
+  tenantId: string;
+  tenantName: string;
+  status: "ACTIVE" | "INACTIVE";
+  accessCodeEnabled: boolean;
+  lastSeenAt: string | null;
+  isOnline: boolean;
+  fieldWorkStatus: "NOT_STARTED" | "ACTIVE" | "ENDED";
+  joinedAt: string;
+}
+
+export interface PlatformActivityItem {
+  id: string;
+  action: string;
+  actorType: "PLATFORM_ADMIN" | "TENANT_ADMIN" | "SYSTEM";
+  tenantId: string | null;
+  tenantName: string | null;
+  createdAt: string;
+}
+
+export interface PlatformRevenue {
+  mrr: number;
+  arr: number;
+  thisMonthRevenue: number;
+  lastMonthRevenue: number;
+  grossRevenueLast12mo: number;
+  successfulPayments: number;
+  failedPayments: number;
+  refunds: number;
+  newSubscriptionsLast30d: number;
+  upgradesLast30d: number;
+  downgradesLast30d: number;
+  cancellationsLast30d: number;
+  revenueByMonth: { month: string; amount: number }[];
+  revenueByPlan: { planKey: string; planName: string; mrr: number }[];
+  currency: string;
+  note: string;
+}
+
+export interface PlatformSystemHealth {
+  overall: "healthy" | "degraded" | "down";
+  services: { name: string; status: "healthy" | "degraded" | "down"; detail: string }[];
+  environment: string;
+  checkedAt: string;
 }
 
 export interface PlatformSubscriptionListItem {
