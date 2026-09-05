@@ -138,7 +138,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" description="Real-time overview of your sales force performance." />
+      <PageHeader title="Dashboard" description="Real-time overview of your field sales performance." />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {loading

@@ -50,7 +50,7 @@ export function PlanPickerDialog({
 
   const handleSelect = async (plan: PublicPlan) => {
     if (plan.monthlyPrice === 0) {
-      window.location.href = "mailto:growthbridge16@gmail.com?subject=Sales%20Grid%20Enterprise";
+      window.location.assign("mailto:growthbridge16@gmail.com?subject=Sales%20Grid%20Enterprise");
       return;
     }
     setBusyKey(plan.key);

@@ -178,7 +178,6 @@ router.get(
       where: { id: req.params.id, tenantId: req.auth!.tenantId },
       select: { id: true, accessCode: true, accessCodeEnabled: true, accessCodeLastUsedAt: true },
     });
-    });
     if (!sp) return res.status(404).json({ error: "Not found" });
     if (!sp.accessCode) {
       const code = await generateUniqueAccessCode();

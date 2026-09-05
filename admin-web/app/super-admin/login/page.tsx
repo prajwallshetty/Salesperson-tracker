@@ -33,12 +33,8 @@ export default function SuperAdminLoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 px-4">
       <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-white">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
-            <ShieldCheck className="size-7" />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sales Grid</h1>
-          <p className="mt-1 text-sm text-white/60">Platform Super Admin</p>
+        <div className="mb-8 flex flex-col items-center">
+          <img src="/logo.png" alt="SalesGrid" className="h-16 sm:h-20 w-auto object-contain filter drop-shadow-md" />
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-2xl">
