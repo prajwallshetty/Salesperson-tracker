@@ -1,7 +1,13 @@
 import { prisma } from "../lib/prisma";
 import { getRazorpay } from "../lib/razorpay";
 import { recordBillingAudit } from "./billingAudit";
+import { mapRazorpaySubscriptionStatus } from "../lib/subscriptionStatusMap";
 import type { BillingInterval } from "@prisma/client";
+
+// Razorpay subscriptions that are past these states no longer accept a plan-change API call -
+// there's nothing at Razorpay left to update, so a "change plan" request against one of these
+// must go through checkout (a brand new subscription) instead of subscriptions.update().
+const RAZORPAY_LIVE_STATUSES = new Set(["TRIALING", "ACTIVE", "PAST_DUE", "SUSPENDED"]);
 
 /**
  * Checkout-initiation side of the Razorpay integration (as opposed to services/billing.ts's
@@ -88,6 +94,61 @@ export async function createCheckoutSubscription(
     razorpaySubscriptionId: subscription.id,
     razorpayKeyId: process.env.RAZORPAY_KEY_ID,
   };
+}
+
+/**
+ * Changes the plan on a tenant's EXISTING, already-authorized Razorpay subscription (upgrade or
+ * downgrade) via Razorpay's own subscriptions.update - never by editing Subscription.planId in
+ * Postgres alone, per the task's explicit "do not simply change plan_id without synchronizing
+ * Razorpay" rule. Unlike createCheckoutSubscription this needs no browser checkout popup: the
+ * customer already has a live payment mandate, so Razorpay applies the new plan (and its own
+ * proration) directly. `schedule_change_at: "now"` matches what the billing UI promises the
+ * admin - an immediate switch, not one deferred to the next cycle.
+ *
+ * Trusting this call's synchronous response (rather than waiting for a webhook) is safe: unlike
+ * a browser payment-success callback, this is a server-to-server Razorpay API call our own
+ * backend made and is not something a client can forge.
+ */
+export async function changeSubscriptionPlan(tenantId: string, planId: string, interval: BillingInterval, actorId: string | null) {
+  const subscription = await prisma.subscription.findUnique({ where: { tenantId }, include: { plan: true } });
+  if (!subscription) throw Object.assign(new Error("Subscription not found"), { status: 404 });
+  if (!subscription.providerSubscriptionId || !RAZORPAY_LIVE_STATUSES.has(subscription.status)) {
+    throw Object.assign(new Error("No live Razorpay subscription to change - start checkout instead"), { status: 409 });
+  }
+
+  const newPlan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+  if (!newPlan) throw Object.assign(new Error("Plan not found"), { status: 404 });
+  const razorpayPlanId = interval === "MONTHLY" ? newPlan.razorpayMonthlyPlanId : newPlan.razorpayYearlyPlanId;
+  if (!razorpayPlanId) throw new PlanNotConfiguredForRazorpayError(newPlan.name, interval);
+
+  const razorpay = getRazorpay();
+  const updated = await razorpay.subscriptions.update(subscription.providerSubscriptionId, {
+    plan_id: razorpayPlanId,
+    schedule_change_at: "now",
+  });
+
+  const result = await prisma.subscription.update({
+    where: { tenantId },
+    data: {
+      planId: newPlan.id,
+      billingInterval: interval,
+      status: mapRazorpaySubscriptionStatus(updated.status),
+      currentPeriodStart: updated.current_start ? new Date(updated.current_start * 1000) : subscription.currentPeriodStart,
+      currentPeriodEnd: updated.current_end ? new Date(updated.current_end * 1000) : subscription.currentPeriodEnd,
+    },
+    include: { plan: true },
+  });
+
+  await recordBillingAudit({
+    tenantId,
+    actorType: "TENANT_ADMIN",
+    actorId,
+    action: newPlan.monthlyPrice >= subscription.plan.monthlyPrice ? "PLAN_UPGRADED" : "PLAN_DOWNGRADED",
+    previousState: { planKey: subscription.plan.key, billingInterval: subscription.billingInterval },
+    newState: { planKey: newPlan.key, billingInterval: interval },
+  });
+
+  return result;
 }
 
 /**

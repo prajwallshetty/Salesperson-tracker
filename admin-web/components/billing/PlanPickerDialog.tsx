@@ -56,6 +56,14 @@ export function PlanPickerDialog({
     setBusyKey(plan.key);
     try {
       const res = await api.post("/billing/checkout", { planKey: plan.key, interval });
+      if (res.data.changed) {
+        // Already had a live Razorpay subscription - the backend changed its plan directly via
+        // Razorpay's subscriptions.update, no checkout popup involved (see billing.routes.ts).
+        toast.success(`Switched to the ${plan.name} plan.`);
+        onCheckoutSubmitted();
+        onClose();
+        return;
+      }
       const { razorpaySubscriptionId, razorpayKeyId } = res.data as { razorpaySubscriptionId: string; razorpayKeyId: string };
       await openRazorpayCheckout({
         keyId: razorpayKeyId,

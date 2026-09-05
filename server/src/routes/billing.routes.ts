@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { getTenantSubscription } from "../lib/entitlements";
 import {
   createCheckoutSubscription,
+  changeSubscriptionPlan,
   cancelRazorpaySubscription,
   PlanNotConfiguredForRazorpayError,
 } from "../services/razorpayBilling";
@@ -67,6 +68,12 @@ const checkoutSchema = z.object({
   interval: z.enum(["MONTHLY", "YEARLY"]),
 });
 
+// Razorpay subscription states that still have a live, chargeable mandate at Razorpay - a plan
+// switch from one of these goes through subscriptions.update() (see changeSubscriptionPlan),
+// never a brand new checkout, or the tenant would end up with two concurrent Razorpay
+// subscriptions and get billed twice.
+const RAZORPAY_LIVE_STATUSES = new Set(["TRIALING", "ACTIVE", "PAST_DUE", "SUSPENDED"]);
+
 router.post(
   "/checkout",
   requireRole("ADMIN"),
@@ -81,7 +88,17 @@ router.post(
     const user = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    const current = await getTenantSubscription(tenantId);
+    const isPlanChangeOnLiveSubscription = Boolean(current.providerSubscriptionId) && RAZORPAY_LIVE_STATUSES.has(current.status);
+
     try {
+      if (isPlanChangeOnLiveSubscription) {
+        // Already has an authorized Razorpay mandate - change the plan on it directly, no new
+        // checkout/payment popup needed (see changeSubscriptionPlan's own audit logging).
+        const subscription = await changeSubscriptionPlan(tenantId, plan.id, interval, user.id);
+        return res.json({ changed: true, subscription });
+      }
+
       const checkout = await createCheckoutSubscription(tenantId, plan.id, interval, {
         email: user.email,
         name: user.name,
@@ -94,7 +111,7 @@ router.post(
         action: "PLAN_SELECTED",
         newState: { planKey, interval },
       });
-      res.json(checkout);
+      res.json({ changed: false, ...checkout });
     } catch (err) {
       if (handleBillingError(err, res)) return;
       throw err;
